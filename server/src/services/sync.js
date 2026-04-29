@@ -1,6 +1,7 @@
 import {
   fetchAllHistory,
   fetchRecentHistory,
+  fetchVideoPages,
   navInfo
 } from './bilibili.js'
 import {
@@ -86,6 +87,34 @@ export async function runSync() {
   const localBvids = new Set(getAllBvids())
   let updatedCount = 0
   let archivedCount = 0
+  const pageCache = new Map()
+
+  // Helper: calculate global progress for a multi-part video
+  async function calcGlobalProgress(historyItem) {
+    try {
+      const pagesInfo = await fetchVideoPages(historyItem.bvid, sessdata)
+      pageCache.set(historyItem.bvid, pagesInfo)
+
+      if (!pagesInfo || !historyItem.cid) return null
+
+      const idx = pagesInfo.pages.findIndex(p => p.cid === historyItem.cid)
+      if (idx < 0) return null
+
+      const previousDuration = pagesInfo.pages
+        .slice(0, idx)
+        .reduce((sum, p) => sum + p.duration, 0)
+
+      const watched = previousDuration + historyItem.progress
+      const pct = pagesInfo.totalDuration > 0
+        ? Math.round((watched / pagesInfo.totalDuration) * 10000) / 100
+        : 0
+
+      return { progressPct: pct, totalDuration: pagesInfo.totalDuration }
+    } catch {
+      // Fetch failed — fall back to simple calculation
+      return null
+    }
+  }
 
   // 4. For each video in B站 history that exists locally, update progress
   for (const video of history) {
@@ -94,16 +123,27 @@ export async function runSync() {
     const local = getVideoByBvid(video.bvid)
     if (!local) continue
 
-    // Calculate progress percentage
-    const progressPct = video.duration > 0
-      ? Math.round((video.progress / video.duration) * 10000) / 100
-      : 0
+    let progressPct
+    let effectiveDuration
+
+    // Try global (multi-part) calculation first
+    const global = await calcGlobalProgress(video)
+    if (global) {
+      progressPct = global.progressPct
+      effectiveDuration = global.totalDuration
+    } else {
+      // Single-page video or fetch failed — use simple per-episode calculation
+      progressPct = video.duration > 0
+        ? Math.round((video.progress / video.duration) * 10000) / 100
+        : 0
+      effectiveDuration = video.duration
+    }
 
     // Update B站-source fields (progress, duration, title from B站)
     syncVideoFields(video.bvid, {
       title: video.title,
       progress: progressPct,
-      duration: video.duration
+      duration: effectiveDuration
     })
 
     // Handle archiving logic
@@ -154,17 +194,45 @@ export async function getAddCandidates() {
 
   const recent = await fetchRecentHistory(sessdata, 20)
   const localBvids = new Set(getAllBvids())
+  const filtered = recent.filter(v => !localBvids.has(v.bvid))
 
-  return recent
-    .filter(v => !localBvids.has(v.bvid))
-    .map(v => ({
+  // Build candidate list with corrected global progress
+  const candidates = []
+  for (const v of filtered) {
+    let progressPct = v.duration > 0
+      ? Math.round((v.progress / v.duration) * 10000) / 100
+      : 0
+    let totalDuration = v.duration
+
+    // Check if multi-part video
+    try {
+      const pagesInfo = await fetchVideoPages(v.bvid, sessdata)
+      if (pagesInfo && v.cid) {
+        const idx = pagesInfo.pages.findIndex(p => p.cid === v.cid)
+        if (idx >= 0) {
+          const previousDuration = pagesInfo.pages
+            .slice(0, idx)
+            .reduce((sum, p) => sum + p.duration, 0)
+          const watched = previousDuration + v.progress
+          progressPct = pagesInfo.totalDuration > 0
+            ? Math.round((watched / pagesInfo.totalDuration) * 10000) / 100
+            : 0
+          totalDuration = pagesInfo.totalDuration
+        }
+      }
+    } catch {
+      // Fall back to per-episode calculation
+    }
+
+    candidates.push({
       bvid: v.bvid,
       title: v.title,
       cover: v.cover,
       author_name: v.author_name,
-      progress: v.duration > 0
-        ? Math.round((v.progress / v.duration) * 10000) / 100
-        : 0,
-      duration: v.duration
-    }))
+      progress: progressPct,
+      duration: totalDuration
+    })
+  }
+
+  return candidates
 }

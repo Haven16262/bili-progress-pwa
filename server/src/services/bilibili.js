@@ -128,9 +128,10 @@ export async function fetchAllHistory(sessdata) {
       if (item.history && item.history.business === 'archive' && item.history.bvid) {
         allVideos.push({
           bvid: item.history.bvid,
+          cid: item.history.cid || 0,          // current episode cid
           title: item.title || '',
-          progress: item.progress || 0,       // seconds watched
-          duration: item.duration || 0,        // total seconds
+          progress: item.progress || 0,        // seconds watched on current cid
+          duration: item.duration || 0,        // duration of current cid (not total)
           view_at: item.view_at || 0           // unix timestamp
         })
       }
@@ -161,6 +162,7 @@ export async function fetchRecentHistory(sessdata, count = 30) {
     .filter(item => item.history && item.history.business === 'archive' && item.history.bvid)
     .map(item => ({
       bvid: item.history.bvid,
+      cid: item.history.cid || 0,
       title: item.title || '',
       cover: item.cover || '',
       author_name: item.author_name || '',
@@ -173,4 +175,21 @@ export async function fetchRecentHistory(sessdata, count = 30) {
 // Fetch video detail (for enriched metadata)
 export async function fetchVideoDetail(bvid, sessdata) {
   return biliGet('/x/web-interface/view', { bvid }, sessdata)
+}
+
+/**
+ * Fetch all pages for a video.
+ * Returns { pages, totalDuration } where pages is [{ cid, duration }]
+ * Returns null for single-page videos (no global calculation needed).
+ * Pages are ordered by page number ascending.
+ */
+export async function fetchVideoPages(bvid, sessdata) {
+  const data = await fetchVideoDetail(bvid, sessdata)
+  if (!data || !Array.isArray(data.pages) || data.pages.length <= 1) {
+    return null
+  }
+  return {
+    pages: data.pages.map(p => ({ cid: p.cid, duration: p.duration || 0 })),
+    totalDuration: data.pages.reduce((sum, p) => sum + (p.duration || 0), 0)
+  }
 }
