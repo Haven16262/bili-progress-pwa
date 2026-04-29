@@ -10,6 +10,17 @@
       >+</button>
     </div>
 
+    <!-- Sync problem warning banner -->
+    <div
+      v-if="syncProblem"
+      @click="$router.push('/settings')"
+      class="mb-4 px-4 py-2.5 bg-red-500/20 border border-red-500/40 rounded-lg flex items-center gap-2 text-sm text-red-300 cursor-pointer active:bg-red-500/30 transition"
+    >
+      <span class="text-base">⚠️</span>
+      <span>SESSDATA 可能已过期，点击前往设置更新</span>
+      <span class="ml-auto text-red-400">→</span>
+    </div>
+
     <!-- Loading -->
     <div v-if="loading" class="text-center text-slate-400 py-20">加载中...</div>
 
@@ -45,7 +56,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
@@ -54,6 +65,7 @@ const videos = ref([])
 const loading = ref(true)
 const columns = ref(3)
 const showAdd = ref(false)
+const syncProblem = inject('syncProblem', ref(false))
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${columns.value}, 1fr)`

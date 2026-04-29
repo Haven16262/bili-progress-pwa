@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen flex flex-col">
-    <PasswordGate v-if="!authenticated" @unlocked="authenticated = true" />
+    <PasswordGate v-if="!authenticated" @unlocked="onUnlocked" />
     <template v-else>
       <main class="flex-1 pb-16 overflow-auto">
         <router-view />
@@ -11,14 +11,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, provide } from 'vue'
 import PasswordGate from './components/PasswordGate.vue'
 import BottomNav from './components/BottomNav.vue'
 
 const authenticated = ref(false)
+const syncProblem = ref(false)
+
+provide('syncProblem', syncProblem)
 
 onMounted(async () => {
-  // Check if existing token is still valid
   const token = localStorage.getItem('token')
   if (token) {
     try {
@@ -27,8 +29,8 @@ onMounted(async () => {
       })
       if (res.ok) {
         authenticated.value = true
+        checkSyncStatus()
       } else {
-        // Token expired or invalid — clear it
         localStorage.removeItem('token')
       }
     } catch {
@@ -36,4 +38,22 @@ onMounted(async () => {
     }
   }
 })
+
+function onUnlocked() {
+  authenticated.value = true
+  checkSyncStatus()
+}
+
+async function checkSyncStatus() {
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/sync/status', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+    syncProblem.value = data.hasProblem === true
+  } catch {
+    // Transient network error — don't alarm
+  }
+}
 </script>

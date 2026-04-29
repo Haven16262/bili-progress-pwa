@@ -20,9 +20,14 @@ router.post('/', async (_req, res) => {
 router.get('/status', (_req, res) => {
   const log = getLatestSyncLog()
   if (!log) {
-    return res.json({ status: 'never', message: '尚未执行过同步', at: null })
+    return res.json({ status: 'never', message: '尚未执行过同步', at: null, hasProblem: false })
   }
-  res.json({ status: log.status, message: log.message, at: log.created_at })
+  res.json({
+    status: log.status,
+    message: log.message,
+    at: log.created_at,
+    hasProblem: log.status === 'failed'
+  })
 })
 
 export default router

@@ -13,7 +13,9 @@ import {
   updateProgress100Count,
   archiveVideo,
   insertSyncLog,
-  getAllSettings
+  getAllSettings,
+  getPageCache,
+  setPageCache
 } from '../db/queries.js'
 
 /**
@@ -87,13 +89,38 @@ export async function runSync() {
   const localBvids = new Set(getAllBvids())
   let updatedCount = 0
   let archivedCount = 0
-  const pageCache = new Map()
+  const pageCache = new Map()  // in-memory dedup for this sync run
+  const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
+
+  // Helper: get pages info (from cache or B站 API)
+  async function getPagesInfo(bvid) {
+    // 1. In-memory (this sync run)
+    if (pageCache.has(bvid)) return pageCache.get(bvid)
+
+    // 2. SQLite cache
+    const cached = getPageCache(bvid)
+    if (cached) {
+      const age = Date.now() - new Date(cached.cachedAt).getTime()
+      if (age < CACHE_TTL_MS) {
+        const info = { pages: cached.pages, totalDuration: cached.totalDuration }
+        pageCache.set(bvid, info)
+        return info
+      }
+    }
+
+    // 3. Fetch from B站
+    const info = await fetchVideoPages(bvid, sessdata)
+    if (info) {
+      setPageCache(bvid, info.pages, info.totalDuration)
+    }
+    pageCache.set(bvid, info)
+    return info
+  }
 
   // Helper: calculate global progress for a multi-part video
   async function calcGlobalProgress(historyItem) {
     try {
-      const pagesInfo = await fetchVideoPages(historyItem.bvid, sessdata)
-      pageCache.set(historyItem.bvid, pagesInfo)
+      const pagesInfo = await getPagesInfo(historyItem.bvid)
 
       if (!pagesInfo || !historyItem.cid) return null
 
@@ -111,7 +138,6 @@ export async function runSync() {
 
       return { progressPct: pct, totalDuration: pagesInfo.totalDuration }
     } catch {
-      // Fetch failed — fall back to simple calculation
       return null
     }
   }
@@ -198,15 +224,25 @@ export async function getAddCandidates() {
 
   // Build candidate list with corrected global progress
   const candidates = []
+  const pageCache = new Map()
+
   for (const v of filtered) {
     let progressPct = v.duration > 0
       ? Math.round((v.progress / v.duration) * 10000) / 100
       : 0
     let totalDuration = v.duration
 
-    // Check if multi-part video
+    // Check if multi-part video (with cache)
     try {
-      const pagesInfo = await fetchVideoPages(v.bvid, sessdata)
+      let pagesInfo = pageCache.get(v.bvid)
+      if (pagesInfo === undefined) {
+        pagesInfo = await fetchVideoPages(v.bvid, sessdata)
+        if (pagesInfo) {
+          setPageCache(v.bvid, pagesInfo.pages, pagesInfo.totalDuration)
+        }
+        pageCache.set(v.bvid, pagesInfo)
+      }
+
       if (pagesInfo && v.cid) {
         const idx = pagesInfo.pages.findIndex(p => p.cid === v.cid)
         if (idx >= 0) {

@@ -101,6 +101,28 @@ export function getAllSettings() {
   )
 }
 
+// ── Page Cache ──
+
+export function getPageCache(bvid) {
+  const db = getDb()
+  const row = db.prepare('SELECT * FROM page_cache WHERE bvid = ?').get(bvid)
+  if (!row) return null
+  return {
+    pageCount: row.page_count,
+    totalDuration: row.total_duration,
+    pages: JSON.parse(row.pages_json),
+    cachedAt: row.cached_at
+  }
+}
+
+export function setPageCache(bvid, pages, totalDuration) {
+  const db = getDb()
+  return db.prepare(`
+    INSERT OR REPLACE INTO page_cache (bvid, page_count, total_duration, pages_json, cached_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `).run(bvid, pages.length, totalDuration, JSON.stringify(pages))
+}
+
 // ── Sync Log ──
 
 export function insertSyncLog(status, message) {

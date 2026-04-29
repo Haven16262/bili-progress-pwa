@@ -45,6 +45,14 @@ function initSchema() {
       message TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS page_cache (
+      bvid TEXT PRIMARY KEY,
+      page_count INTEGER NOT NULL DEFAULT 0,
+      total_duration INTEGER NOT NULL DEFAULT 0,
+      pages_json TEXT NOT NULL DEFAULT '[]',
+      cached_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
   `)
 
   // Seed default settings if not present
