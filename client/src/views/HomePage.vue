@@ -43,6 +43,7 @@
         :progress="video.progress"
         :custom-name="video.custom_name"
         :full-title="video.title"
+        @click="onEditVideo(video)"
       />
     </div>
 
@@ -52,11 +53,43 @@
       @close="showAdd = false"
       @added="onVideoAdded"
     />
+
+    <!-- Edit name modal -->
+    <div
+      v-if="editingVideo"
+      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      @click.self="editingVideo = null"
+    >
+      <div class="absolute inset-0 bg-black/60"></div>
+      <div class="relative bg-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 pb-8 sm:pb-5 shadow-xl">
+        <h3 class="text-sm font-semibold mb-3">修改显示名称</h3>
+        <p class="text-xs text-slate-400 mb-3 truncate">{{ editingVideo.title }}</p>
+        <input
+          ref="editInput"
+          v-model="editName"
+          type="text"
+          maxlength="256"
+          class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm text-white outline-none focus:border-cyan-500"
+          placeholder="留空则显示原标题"
+          @keyup.enter="saveEditName"
+        />
+        <div class="flex gap-2 mt-4">
+          <button
+            @click="editingVideo = null"
+            class="flex-1 py-2 bg-slate-700 text-slate-300 rounded-lg text-sm"
+          >取消</button>
+          <button
+            @click="saveEditName"
+            class="flex-1 py-2 bg-cyan-500 text-black rounded-lg text-sm font-semibold"
+          >保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, onMounted, inject, nextTick } from 'vue'
 import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
@@ -66,6 +99,9 @@ const loading = ref(true)
 const columns = ref(3)
 const showAdd = ref(false)
 const syncProblem = inject('syncProblem', ref(false))
+const editingVideo = ref(null)
+const editName = ref('')
+const editInput = ref(null)
 
 const gridStyle = computed(() => ({
   gridTemplateColumns: `repeat(${columns.value}, 1fr)`
@@ -96,5 +132,22 @@ async function loadSettings() {
 function onVideoAdded() {
   showAdd.value = false
   loadVideos()
+}
+
+function onEditVideo(video) {
+  editingVideo.value = video
+  editName.value = video.custom_name || ''
+  nextTick(() => editInput.value?.focus())
+}
+
+async function saveEditName() {
+  if (!editingVideo.value) return
+  const name = editName.value.trim()
+  try {
+    await api.updateVideo(editingVideo.value.id, { custom_name: name })
+    const v = videos.value.find(v => v.id === editingVideo.value.id)
+    if (v) v.custom_name = name
+  } catch { /* ignore */ }
+  editingVideo.value = null
 }
 </script>

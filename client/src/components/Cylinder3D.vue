@@ -1,5 +1,5 @@
 <template>
-  <div class="cylinder-wrapper">
+  <div class="cylinder-wrapper" @click="$emit('click')">
     <!-- Glass cylinder -->
     <div class="cylinder-glass">
       <!-- Back rim of top opening -->
@@ -38,6 +38,8 @@
 
 <script setup>
 import { computed } from 'vue'
+
+defineEmits(['click'])
 
 const props = defineProps({
   progress: { type: Number, default: 0 },
@@ -96,7 +98,7 @@ const liquidStyle = computed(() => ({
     inset 0 0 20px rgba(0, 0, 0, 0.5),
     0 4px 16px rgba(0, 0, 0, 0.4);
   overflow: hidden;
-  cursor: default;
+  cursor: pointer;
 }
 
 /* Top rim - elliptical opening */
