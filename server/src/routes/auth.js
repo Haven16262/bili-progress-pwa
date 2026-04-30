@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import rateLimit from 'express-rate-limit'
-import { signToken, requireAuth } from '../middleware/auth.js'
+import { signToken, requireAuth, revokeAllTokens } from '../middleware/auth.js'
 import { getSetting, setSetting } from '../db/queries.js'
 import { encryptSessdata } from '../services/crypto.js'
 
@@ -58,6 +58,30 @@ router.put('/sessdata', requireAuth, (req, res) => {
   }
   setSetting('sessdata', encryptSessdata(sessdata.trim()))
   res.json({ ok: true })
+})
+
+// POST /api/auth/revoke — invalidate all existing tokens
+router.post('/revoke', requireAuth, (req, res) => {
+  const { password } = req.body
+  const correct = process.env.APP_PASSWORD
+  if (!correct) {
+    return res.status(500).json({ error: '服务器配置错误' })
+  }
+
+  // Verify current password before revoking
+  const maxLen = 128
+  const bufA = Buffer.alloc(maxLen, 0)
+  const bufB = Buffer.alloc(maxLen, 0)
+  Buffer.from(password || '').copy(bufA)
+  Buffer.from(correct).copy(bufB)
+  if (!crypto.timingSafeEqual(bufA, bufB)) {
+    return res.status(403).json({ error: '密码错误' })
+  }
+
+  const v = revokeAllTokens()
+  // Issue a new token so the current session stays alive
+  const token = signToken()
+  res.json({ token, tokenVersion: v })
 })
 
 export default router

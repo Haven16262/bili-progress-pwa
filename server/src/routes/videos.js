@@ -39,8 +39,8 @@ router.post('/', (req, res) => {
   insertVideo({
     bvid,
     title: typeof title === 'string' ? title.slice(0, MAX_TITLE) : '',
-    progress: Number(progress) || 0,
-    duration: Number(duration) || 0,
+    progress: Math.max(0, Math.min(100, Number(progress) || 0)),
+    duration: Math.max(0, Number(duration) || 0),
     custom_name: typeof custom_name === 'string' ? custom_name.slice(0, MAX_CUSTOM_NAME) : '',
     pinned: pinned ? 1 : 0
   })

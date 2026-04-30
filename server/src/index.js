@@ -33,7 +33,8 @@ app.use(helmet({
       baseUri: ["'self'"]
     }
   },
-  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true }
 }))
 
 // Permissions-Policy — restrict browser features (helmet 8 dropped this)
@@ -99,7 +100,7 @@ cron.schedule('7 3 * * *', async () => {
     console.log('[cron]', result.ok ? result : result.error)
   } catch (err) {
     console.error('[cron] 同步异常:', err.message)
-    insertSyncLog('failed', `定时同步异常: ${err.message}`)
+    insertSyncLog('failed', '定时同步异常，请查看服务器日志')
     setSetting('last_sync_status', '定时同步异常，请查看同步日志')
     setSetting('last_sync_at', new Date().toISOString())
   }
