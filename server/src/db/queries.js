@@ -81,6 +81,12 @@ export function getAllBvids() {
   return db.prepare('SELECT bvid FROM videos').all().map(r => r.bvid)
 }
 
+export function getProgress100Map() {
+  const db = getDb()
+  const rows = db.prepare('SELECT bvid, progress_100_count FROM videos').all()
+  return new Map(rows.map(r => [r.bvid, r.progress_100_count || 0]))
+}
+
 // ── Settings ──
 
 export function getSetting(key) {

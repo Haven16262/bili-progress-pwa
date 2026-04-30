@@ -2,27 +2,28 @@ import {
   fetchAllHistory,
   fetchRecentHistory,
   fetchVideoPages,
-  navInfo
+  navInfo,
+  computeGlobalProgress,
+  computeEpisodeProgress
 } from './bilibili.js'
 import {
   getSetting,
   setSetting,
   getAllBvids,
-  getVideoByBvid,
   syncVideoFields,
   updateProgress100Count,
   archiveVideo,
   insertSyncLog,
-  getAllSettings,
   getPageCache,
-  setPageCache
+  setPageCache,
+  getProgress100Map
 } from '../db/queries.js'
 import { decryptSessdata } from './crypto.js'
 
-/**
- * Validate that the current SESSDATA is still valid.
- * Returns { valid, mid } — mid is the user's B站 UID.
- */
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
+
+// ── SESSDATA helpers ──
+
 function getSessdata() {
   return decryptSessdata(getSetting('sessdata'))
 }
@@ -44,23 +45,48 @@ export async function validateSession() {
   }
 }
 
+// ── Page info cache helper ──
+
+async function getPagesInfo(bvid, sessdata, pageCache) {
+  // 1. In-memory (this sync run)
+  if (pageCache.has(bvid)) return pageCache.get(bvid)
+
+  // 2. SQLite cache (7-day TTL)
+  const cached = getPageCache(bvid)
+  if (cached) {
+    const age = Date.now() - new Date(cached.cachedAt).getTime()
+    if (age < CACHE_TTL_MS) {
+      const info = { pages: cached.pages, totalDuration: cached.totalDuration }
+      pageCache.set(bvid, info)
+      return info
+    }
+  }
+
+  // 3. Fetch from B站
+  const info = await fetchVideoPages(bvid, sessdata)
+  if (info) {
+    setPageCache(bvid, info.pages, info.totalDuration)
+  }
+  pageCache.set(bvid, info)
+  return info
+}
+
+// ── Sync helpers ──
+
+function logFailure(msg, statusMsg, syncLogMsg) {
+  insertSyncLog('failed', syncLogMsg)
+  setSetting('last_sync_status', statusMsg)
+  setSetting('last_sync_at', new Date().toISOString())
+  return { ok: false, error: msg }
+}
+
 /**
  * Main sync: pull B站 history, update local DB, handle archiving.
- *
- * Sync rules:
- * - Progress %: B站 is authoritative
- * - Title, pinned, archived: local DB is authoritative
- * - New bvids from B站 are NOT auto-added (user uses "+" button)
- * - Videos at 100% for 3 consecutive syncs → auto-archive
  */
 export async function runSync() {
   const sessdata = getSessdata()
   if (!sessdata) {
-    const msg = '同步失败：未配置 SESSDATA'
-    insertSyncLog('failed', msg)
-    setSetting('last_sync_status', msg)
-    setSetting('last_sync_at', new Date().toISOString())
-    return { ok: false, error: '未配置 SESSDATA' }
+    return logFailure('未配置 SESSDATA', '同步失败：未配置 SESSDATA', '同步失败：未配置 SESSDATA')
   }
 
   // 1. Verify session
@@ -71,11 +97,11 @@ export async function runSync() {
       throw new Error('SESSDATA 无效，登录状态已过期')
     }
   } catch (err) {
-    const msg = `同步失败：Cookie 验证失败 — ${err.message}`
-    insertSyncLog('failed', msg)
-    setSetting('last_sync_status', '同步失败：SESSDATA 验证失败，请更新 Cookie')
-    setSetting('last_sync_at', new Date().toISOString())
-    return { ok: false, error: 'SESSDATA 验证失败，请在设置页面更新 B 站 Cookie' }
+    return logFailure(
+      'SESSDATA 验证失败，请在设置页面更新 B 站 Cookie',
+      '同步失败：SESSDATA 验证失败，请更新 Cookie',
+      `同步失败：Cookie 验证失败 — ${err.message}`
+    )
   }
 
   // 2. Fetch all history from B站
@@ -83,113 +109,57 @@ export async function runSync() {
   try {
     history = await fetchAllHistory(sessdata)
   } catch (err) {
-    const msg = `同步失败：获取历史记录出错 — ${err.message}`
-    insertSyncLog('failed', msg)
-    setSetting('last_sync_status', '同步失败：无法获取 B 站数据，请稍后重试')
-    setSetting('last_sync_at', new Date().toISOString())
-    return { ok: false, error: '无法获取 B 站数据，请确认 SESSDATA 有效并稍后重试' }
+    return logFailure(
+      '无法获取 B 站数据，请确认 SESSDATA 有效并稍后重试',
+      '同步失败：无法获取 B 站数据，请稍后重试',
+      `同步失败：获取历史记录出错 — ${err.message}`
+    )
   }
 
-  // 3. Get local bvids for filtering
+  // 3. Pre-load local data for efficient lookups
   const localBvids = new Set(getAllBvids())
+  const progress100Map = getProgress100Map()  // bvid → progress_100_count
+  const pageCache = new Map()
   let updatedCount = 0
   let archivedCount = 0
-  const pageCache = new Map()  // in-memory dedup for this sync run
-  const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
 
-  // Helper: get pages info (from cache or B站 API)
-  async function getPagesInfo(bvid) {
-    // 1. In-memory (this sync run)
-    if (pageCache.has(bvid)) return pageCache.get(bvid)
-
-    // 2. SQLite cache
-    const cached = getPageCache(bvid)
-    if (cached) {
-      const age = Date.now() - new Date(cached.cachedAt).getTime()
-      if (age < CACHE_TTL_MS) {
-        const info = { pages: cached.pages, totalDuration: cached.totalDuration }
-        pageCache.set(bvid, info)
-        return info
-      }
-    }
-
-    // 3. Fetch from B站
-    const info = await fetchVideoPages(bvid, sessdata)
-    if (info) {
-      setPageCache(bvid, info.pages, info.totalDuration)
-    }
-    pageCache.set(bvid, info)
-    return info
-  }
-
-  // Helper: calculate global progress for a multi-part video
-  async function calcGlobalProgress(historyItem) {
-    try {
-      const pagesInfo = await getPagesInfo(historyItem.bvid)
-
-      if (!pagesInfo || !historyItem.cid) return null
-
-      const idx = pagesInfo.pages.findIndex(p => p.cid === historyItem.cid)
-      if (idx < 0) return null
-
-      const previousDuration = pagesInfo.pages
-        .slice(0, idx)
-        .reduce((sum, p) => sum + p.duration, 0)
-
-      const watched = previousDuration + historyItem.progress
-      const pct = pagesInfo.totalDuration > 0
-        ? Math.round((watched / pagesInfo.totalDuration) * 10000) / 100
-        : 0
-
-      return { progressPct: pct, totalDuration: pagesInfo.totalDuration }
-    } catch {
-      return null
-    }
-  }
-
-  // 4. For each video in B站 history that exists locally, update progress
+  // 4. Process each B站 history entry that exists locally
   for (const video of history) {
     if (!localBvids.has(video.bvid)) continue
-
-    const local = getVideoByBvid(video.bvid)
-    if (!local) continue
 
     let progressPct
     let effectiveDuration
 
-    // Try global (multi-part) calculation first
-    const global = await calcGlobalProgress(video)
+    const pagesInfo = await getPagesInfo(video.bvid, sessdata, pageCache)
+    const global = computeGlobalProgress(pagesInfo, video.cid, video.progress)
     if (global) {
       progressPct = global.progressPct
       effectiveDuration = global.totalDuration
     } else {
-      // Single-page video or fetch failed — use simple per-episode calculation
-      progressPct = video.duration > 0
-        ? Math.round((video.progress / video.duration) * 10000) / 100
-        : 0
+      progressPct = computeEpisodeProgress(video.progress, video.duration)
       effectiveDuration = video.duration
     }
 
-    // Update B站-source fields (progress, duration, title from B站)
     syncVideoFields(video.bvid, {
       title: video.title,
       progress: progressPct,
       duration: effectiveDuration
     })
 
-    // Handle archiving logic
+    // Handle archiving
     if (progressPct >= 100) {
-      const newCount = (local.progress_100_count || 0) + 1
+      const newCount = (progress100Map.get(video.bvid) || 0) + 1
       updateProgress100Count(video.bvid, newCount)
+      progress100Map.set(video.bvid, newCount)
 
       if (newCount >= 3) {
         archiveVideo(video.bvid)
         archivedCount++
       }
     } else {
-      // Reset counter if not at 100%
-      if (local.progress_100_count > 0) {
+      if ((progress100Map.get(video.bvid) || 0) > 0) {
         updateProgress100Count(video.bvid, 0)
+        progress100Map.set(video.bvid, 0)
       }
     }
 
@@ -213,8 +183,7 @@ export async function runSync() {
 }
 
 /**
- * Get recent B站 history, filtered to only show videos NOT already on homepage.
- * Used by the "+" button flow.
+ * Get recent B站 history, filtered to show only videos NOT already on homepage.
  */
 export async function getAddCandidates() {
   const sessdata = getSessdata()
@@ -225,40 +194,19 @@ export async function getAddCandidates() {
   const recent = await fetchRecentHistory(sessdata, 20)
   const localBvids = new Set(getAllBvids())
   const filtered = recent.filter(v => !localBvids.has(v.bvid))
-
-  // Build candidate list with corrected global progress
-  const candidates = []
   const pageCache = new Map()
 
+  const candidates = []
   for (const v of filtered) {
-    let progressPct = v.duration > 0
-      ? Math.round((v.progress / v.duration) * 10000) / 100
-      : 0
+    let progressPct = computeEpisodeProgress(v.progress, v.duration)
     let totalDuration = v.duration
 
-    // Check if multi-part video (with cache)
     try {
-      let pagesInfo = pageCache.get(v.bvid)
-      if (pagesInfo === undefined) {
-        pagesInfo = await fetchVideoPages(v.bvid, sessdata)
-        if (pagesInfo) {
-          setPageCache(v.bvid, pagesInfo.pages, pagesInfo.totalDuration)
-        }
-        pageCache.set(v.bvid, pagesInfo)
-      }
-
-      if (pagesInfo && v.cid) {
-        const idx = pagesInfo.pages.findIndex(p => p.cid === v.cid)
-        if (idx >= 0) {
-          const previousDuration = pagesInfo.pages
-            .slice(0, idx)
-            .reduce((sum, p) => sum + p.duration, 0)
-          const watched = previousDuration + v.progress
-          progressPct = pagesInfo.totalDuration > 0
-            ? Math.round((watched / pagesInfo.totalDuration) * 10000) / 100
-            : 0
-          totalDuration = pagesInfo.totalDuration
-        }
+      const pagesInfo = await getPagesInfo(v.bvid, sessdata, pageCache)
+      const global = computeGlobalProgress(pagesInfo, v.cid, v.progress)
+      if (global) {
+        progressPct = global.progressPct
+        totalDuration = global.totalDuration
       }
     } catch {
       // Fall back to per-episode calculation

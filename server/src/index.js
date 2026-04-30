@@ -92,6 +92,12 @@ if (existsSync(distPath)) {
   console.log('[static] Serving built client from client/dist')
 }
 
+// Global error handler — prevent stack traces from leaking to clients
+app.use((err, _req, res, _next) => {
+  console.error('[error]', err)
+  res.status(500).json({ error: '服务器内部错误' })
+})
+
 // ── Cron: daily sync at 3:07 AM ──
 cron.schedule('7 3 * * *', async () => {
   console.log('[cron] 开始每日同步...')
@@ -100,9 +106,13 @@ cron.schedule('7 3 * * *', async () => {
     console.log('[cron]', result.ok ? result : result.error)
   } catch (err) {
     console.error('[cron] 同步异常:', err.message)
-    insertSyncLog('failed', '定时同步异常，请查看服务器日志')
-    setSetting('last_sync_status', '定时同步异常，请查看同步日志')
-    setSetting('last_sync_at', new Date().toISOString())
+    try {
+      insertSyncLog('failed', '定时同步异常，请查看服务器日志')
+      setSetting('last_sync_status', '定时同步异常，请查看同步日志')
+      setSetting('last_sync_at', new Date().toISOString())
+    } catch (logErr) {
+      console.error('[cron] 无法写入同步日志:', logErr)
+    }
   }
 })
 

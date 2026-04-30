@@ -11,7 +11,8 @@ router.post('/', async (_req, res) => {
   try {
     const result = await runSync()
     res.json(result)
-  } catch {
+  } catch (err) {
+    console.error('[sync]', err)
     res.status(500).json({ error: '同步服务异常，请稍后重试' })
   }
 })

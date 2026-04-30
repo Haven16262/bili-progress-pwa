@@ -145,8 +145,8 @@ async function saveEditName() {
   const name = editName.value.trim()
   try {
     await api.updateVideo(editingVideo.value.id, { custom_name: name })
-    const v = videos.value.find(v => v.id === editingVideo.value.id)
-    if (v) v.custom_name = name
+    const target = videos.value.find(item => item.id === editingVideo.value.id)
+    if (target) target.custom_name = name
   } catch { /* ignore */ }
   editingVideo.value = null
 }
