@@ -18,7 +18,13 @@ router.put('/', (req, res) => {
   const allowed = ['columns_per_row']
   for (const key of allowed) {
     if (req.body[key] !== undefined) {
-      setSetting(key, String(req.body[key]))
+      if (key === 'columns_per_row') {
+        const val = parseInt(req.body[key])
+        if (isNaN(val) || val < 1 || val > 6) {
+          return res.status(400).json({ error: 'columns_per_row 必须为 1-6 的整数' })
+        }
+        setSetting(key, String(val))
+      }
     }
   }
   res.json({ ok: true })

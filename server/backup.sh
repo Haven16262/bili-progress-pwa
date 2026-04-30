@@ -7,8 +7,10 @@ SRC="/root/workspace/projects/bili-progress-pwa/server/data.db"
 BACKUP_DIR="/root/workspace/projects/bili-progress-pwa/server/backups"
 
 mkdir -p "$BACKUP_DIR"
+chmod 700 "$BACKUP_DIR"
 
 if [ -f "$SRC" ]; then
   cp "$SRC" "$BACKUP_DIR/data.$(date +%Y%m%d).db"
+  chmod 600 "$BACKUP_DIR/data.$(date +%Y%m%d).db"
   find "$BACKUP_DIR" -name "data.*.db" -mtime +7 -delete
 fi

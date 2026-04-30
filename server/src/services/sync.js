@@ -17,13 +17,18 @@ import {
   getPageCache,
   setPageCache
 } from '../db/queries.js'
+import { decryptSessdata } from './crypto.js'
 
 /**
  * Validate that the current SESSDATA is still valid.
  * Returns { valid, mid } — mid is the user's B站 UID.
  */
+function getSessdata() {
+  return decryptSessdata(getSetting('sessdata'))
+}
+
 export async function validateSession() {
-  const sessdata = getSetting('sessdata')
+  const sessdata = getSessdata()
   if (!sessdata) {
     return { valid: false, error: '未配置 SESSDATA，请在设置页填写' }
   }
@@ -49,7 +54,7 @@ export async function validateSession() {
  * - Videos at 100% for 3 consecutive syncs → auto-archive
  */
 export async function runSync() {
-  const sessdata = getSetting('sessdata')
+  const sessdata = getSessdata()
   if (!sessdata) {
     const msg = '同步失败：未配置 SESSDATA'
     insertSyncLog('failed', msg)
@@ -201,7 +206,6 @@ export async function runSync() {
 
   return {
     ok: true,
-    mid: nav.mid,
     totalFetched: history.length,
     updated: updatedCount,
     archived: archivedCount
@@ -213,7 +217,7 @@ export async function runSync() {
  * Used by the "+" button flow.
  */
 export async function getAddCandidates() {
-  const sessdata = getSetting('sessdata')
+  const sessdata = getSessdata()
   if (!sessdata) {
     throw new Error('未配置 SESSDATA')
   }

@@ -50,7 +50,7 @@ async function biliGet(path, params = {}, sessdata) {
     if (json.code === 22002) {
       throw new Error('指定的视频不存在')
     }
-    throw new Error(`B站 API 返回错误 (code=${json.code})`)
+    throw new Error('B站 API 返回未知错误')
   }
 
   return json.data

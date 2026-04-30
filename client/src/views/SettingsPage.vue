@@ -154,9 +154,7 @@ async function triggerSync() {
     if (res.ok) {
       syncStatus.value = {
         status: 'success',
-        message: res.mid
-          ? `用户 ${res.mid} · 更新 ${res.updated} 个视频` + (res.archived ? ` · 归档 ${res.archived} 个` : '')
-          : '同步成功',
+        message: `更新 ${res.updated} 个视频` + (res.archived ? ` · 归档 ${res.archived} 个` : ''),
         at: new Date().toISOString()
       }
     } else {

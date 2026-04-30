@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import cron from 'node-cron'
 import authRoutes from './routes/auth.js'
 import videoRoutes from './routes/videos.js'
@@ -10,6 +11,7 @@ import settingsRoutes from './routes/settings.js'
 import bilibiliRoutes from './routes/bilibili.js'
 import { runSync } from './services/sync.js'
 import { getSetting, insertSyncLog, setSetting } from './db/queries.js'
+import { decryptSessdata } from './services/crypto.js'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -18,7 +20,27 @@ const PORT = process.env.PORT || 3000
 app.set('trust proxy', 1)
 
 // Security headers
-app.use(helmet())
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "https://*.bilibili.com", "data:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      formAction: ["'self'"],
+      baseUri: ["'self'"]
+    }
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' }
+}))
+
+// Permissions-Policy — restrict browser features (helmet 8 dropped this)
+app.use((_req, res, next) => {
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=()')
+  next()
+})
 
 // CORS — only allow the frontend origin
 app.use(cors({
@@ -27,6 +49,15 @@ app.use(cors({
 }))
 
 app.use(express.json({ limit: '1mb' }))
+
+// General rate limit for all API routes
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false
+})
+app.use('/api', apiLimiter)
 
 // API routes
 app.use('/api/auth', authRoutes)
@@ -37,6 +68,11 @@ app.use('/api/bilibili', bilibiliRoutes)
 
 // Health check
 app.get('/api/ping', (_req, res) => res.json({ ok: true }))
+
+// Catch-all for unmatched API paths — return 404 JSON instead of index.html
+app.use('/api/*', (_req, res) => {
+  res.status(404).json({ error: 'API 端点不存在' })
+})
 
 // ── Production static serving ──
 import { existsSync } from 'fs'
@@ -71,7 +107,7 @@ cron.schedule('7 3 * * *', async () => {
 
 app.listen(PORT, '127.0.0.1', () => {
   console.log(`Server running on http://127.0.0.1:${PORT}`)
-  const sess = getSetting('sessdata')
+  const sess = decryptSessdata(getSetting('sessdata'))
   console.log(sess
     ? '[cron] 每日同步已安排 (每天 03:07)'
     : '[cron] 每日同步已安排 (每天 03:07) — 等待 SESSDATA 配置')
