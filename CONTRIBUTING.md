@@ -12,7 +12,7 @@
 
 1. Fork 本仓库
 2. 创建功能分支 (`git checkout -b feat/your-feature`)
-3. 遵守现有代码风格（ESLint + Prettier 如已配置）
+3. 遵守现有代码风格
 4. 提交前确保功能正常：`cd server && npm run dev` 和 `cd client && npm run dev`
 5. 提交简洁的 commit message（参考 [Conventional Commits](https://www.conventionalcommits.org/)）
 6. Push 并创建 PR
