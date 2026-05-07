@@ -1,5 +1,8 @@
 # Bili Progress
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](./CHANGELOG.md)
+
 Bilibili 观看进度 3D 可视化 PWA。通过圆柱体高度直观展示所有追番/追剧的观看进度，支持自动同步 B 站观看历史。
 
 ## 技术栈
@@ -69,11 +72,17 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 │   │   └── services/        # API 封装
 │   └── vite.config.js       # PWA + 代理配置
 ├── server/                  # Express 后端
-│   └── src/
-│       ├── routes/          # auth / videos / sync / settings / bilibili
-│       ├── services/        # bilibili API / crypto / sync
-│       ├── middleware/      # JWT 认证
-│       └── db/              # SQLite 初始化 + 查询
+│   ├── src/
+│   │   ├── routes/          # auth / videos / sync / settings / bilibili
+│   │   ├── services/        # bilibili API / crypto / sync
+│   │   ├── middleware/      # JWT 认证
+│   │   └── db/              # SQLite 初始化 + 查询
+│   ├── .env.example         # 环境变量模板
+│   └── backup.sh            # 数据库备份脚本
+├── .github/                 # Issue 模板
+├── LICENSE
+├── CHANGELOG.md
+├── CONTRIBUTING.md
 └── .gitignore
 ```
 
@@ -81,6 +90,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 > 部署后可在设置页配置 SESSDATA，主页展示 3D 进度圆柱体。
 
+## 相关文件
+
+- [CHANGELOG.md](./CHANGELOG.md) — 版本变更记录
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — 贡献指南
+- [server/.env.example](./server/.env.example) — 环境变量模板
+- [server/backup.sh](./server/backup.sh) — 数据库备份脚本
+
 ## 许可
 
-MIT
+[MIT](./LICENSE)
