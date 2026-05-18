@@ -88,7 +88,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## 截图
 
-> 部署后可在设置页配置 SESSDATA，主页展示 3D 进度圆柱体。
+**主页 — 3D 圆柱体进度可视化**
+
+![主页截图](./docs/screenshots/home.png)
+
+**设置页 — SESSDATA 配置与数据同步**
+
+![设置页截图](./docs/screenshots/settings.png)
 
 ## 相关文件
 

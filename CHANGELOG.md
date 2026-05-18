@@ -2,6 +2,17 @@
 
 All notable changes to Bili Progress PWA.
 
+## [1.1.0] — 2026-05-18
+
+### Added
+- 三设备独立列数设置：手机 / 平板 / 桌面各自用 localStorage 存储，互不影响
+- 手机端圆柱体固定尺寸，不再随网格列宽缩放，保证同屏大小一致
+
+### Fixed
+- 手机竖屏圆柱体大小不一致（网格行高 auto 撑开导致）
+- 手机横屏 / 平板无法上下滑动（min-h-screen 导致 overflow-auto 失效，改为 h-screen）
+- 手机端圆柱体名称横屏下被截断（纵向滚动恢复后自然显示）
+
 ## [1.0.0] — 2025-05-06
 
 ### Added
