@@ -126,7 +126,7 @@ function getColumnsKey(deviceType) {
 
 function getLocalColumns(deviceType) {
   const stored = localStorage.getItem(getColumnsKey(deviceType))
-  if (stored) return Math.max(1, Math.min(6, parseInt(stored) || 2))
+  if (stored) return Math.max(1, Math.min(6, parseInt(stored, 10) || 2))
   const defaults = { mobile: 2, tablet: 3, desktop: 4 }
   return defaults[deviceType] || 3
 }

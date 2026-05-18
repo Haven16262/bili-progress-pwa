@@ -10,23 +10,13 @@ router.get('/', (_req, res) => {
   const settings = getAllSettings()
   // Never return the raw sessdata to the frontend
   delete settings.sessdata
+  // columns_per_row is now managed client-side per device type
+  delete settings.columns_per_row
   res.json(settings)
 })
 
-// PUT /api/settings — update settings
-router.put('/', (req, res) => {
-  const allowed = ['columns_per_row']
-  for (const key of allowed) {
-    if (req.body[key] !== undefined) {
-      if (key === 'columns_per_row') {
-        const val = parseInt(req.body[key])
-        if (isNaN(val) || val < 1 || val > 6) {
-          return res.status(400).json({ error: 'columns_per_row 必须为 1-6 的整数' })
-        }
-        setSetting(key, String(val))
-      }
-    }
-  }
+// PUT /api/settings — columns_per_row is now managed client-side per device type
+router.put('/', (_req, res) => {
   res.json({ ok: true })
 })
 

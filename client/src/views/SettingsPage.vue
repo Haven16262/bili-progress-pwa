@@ -130,7 +130,7 @@ async function loadSettings() {
   try {
     const stored = localStorage.getItem(getColumnsKey(deviceType.value))
     const defaults = { mobile: 2, tablet: 3, desktop: 4 }
-    columns.value = stored ? Math.max(1, Math.min(6, parseInt(stored))) : (defaults[deviceType.value] || 3)
+    columns.value = stored ? Math.max(1, Math.min(6, parseInt(stored, 10) || defaults[deviceType.value])) : (defaults[deviceType.value] || 3)
   } catch { /* ignore */ }
 }
 
