@@ -129,3 +129,34 @@
   - `saveColumns()`：删除 `isMobile` 分支和服务端 `api.updateSettings` 调用，只写 localStorage
 - [x] `npm run build` 成功（JS gzip 41.76KB, CSS gzip 4.24KB）
 - [x] `pm2 restart bili` 成功，`curl http://127.0.0.1:3000/` 返回 200
+
+## [2026-05-18 23:45] 全局者 — 安全审查修复
+
+**背景：**
+security-reviewer 审查本轮改动，发现 2 处 MEDIUM + 1 处 LOW，全部修复。
+
+**任务：**
+
+1. **parseInt radix（MEDIUM）**
+   - `client/src/views/HomePage.vue` 第 129 行：`parseInt(stored)` → `parseInt(stored, 10)`
+   - `client/src/views/SettingsPage.vue` 第 133 行：`parseInt(stored)` → `parseInt(stored, 10)`
+
+2. **NaN 兜底缺失（MEDIUM）**
+   - `client/src/views/SettingsPage.vue` 第 133 行，`parseInt` 失败时 `columns.value` 为 NaN
+   - 参考 HomePage.vue 的写法加 `|| defaults[deviceType]` 或固定默认值兜底
+   - 确保 `stored` 为非数字字符串时列数回退到合理默认值（tablet=3, desktop=4）
+
+3. **服务端死代码清理（LOW）**
+   - `server/src/routes/settings.js`：从允许更新的字段列表中移除 `columns_per_row`
+   - `GET /api/settings` 响应中也不再返回 `columns_per_row`（如有）
+   - 不影响其他设置字段，只删这一个
+
+4. **构建 + 重启 + 验证**
+   - `npm run build`（client 目录）
+   - `pm2 restart bili`
+   - `curl http://127.0.0.1:3000/` 返回 200
+
+- [x] 任务 1：parseInt radix
+- [x] 任务 2：NaN 兜底
+- [x] 任务 3：服务端 columns_per_row 清理
+- [x] 任务 4：构建验证
