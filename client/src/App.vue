@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen flex flex-col">
+  <div class="h-screen flex flex-col">
     <PasswordGate v-if="!authenticated" @unlocked="onUnlocked" />
     <template v-else>
       <main class="flex-1 pb-16 overflow-auto">

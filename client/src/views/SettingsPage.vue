@@ -35,12 +35,15 @@
 
     <!-- Columns per row -->
     <section class="bg-slate-800 rounded-xl p-4 space-y-3">
-      <h3 class="font-semibold text-sm">每行显示数量</h3>
+      <div class="flex items-center justify-between">
+        <h3 class="font-semibold text-sm">每行显示数量</h3>
+        <span v-if="isMobile" class="text-xs text-slate-500">当前设备独立设置</span>
+      </div>
       <div class="flex items-center gap-3">
         <input
           type="range"
           min="1"
-          max="6"
+          :max="isMobile ? 4 : 6"
           :value="columns"
           @input="columns = $event.target.value"
           class="flex-1 accent-cyan-400"
@@ -89,15 +92,31 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { api } from '../services/api.js'
+
+const MOBILE_BREAKPOINT = 768
+const TABLET_BREAKPOINT = 1024
+
+function getDeviceType() {
+  const w = window.innerWidth
+  if (w <= MOBILE_BREAKPOINT) return 'mobile'
+  if (w <= TABLET_BREAKPOINT) return 'tablet'
+  return 'desktop'
+}
+
+function getColumnsKey(deviceType) {
+  return `columns_${deviceType}`
+}
 
 const sessdataInput = ref('')
 const sessdataSet = ref(false)
 const sessdataMsg = ref('')
 const sessdataOk = ref(false)
 
-const columns = ref(3)
+const deviceType = ref(getDeviceType())
+const isMobile = computed(() => deviceType.value === 'mobile')
+const columns = ref(isMobile.value ? 2 : 3)
 const syncing = ref(false)
 
 const syncStatus = ref({ status: 'never', message: '', at: null })
@@ -109,9 +128,9 @@ onMounted(() => {
 
 async function loadSettings() {
   try {
-    const s = await api.getSettings()
-    // sessdata is excluded from response, but we check if it exists
-    columns.value = Math.max(1, Math.min(6, parseInt(s.columns_per_row) || 3))
+    const stored = localStorage.getItem(getColumnsKey(deviceType.value))
+    const defaults = { mobile: 2, tablet: 3, desktop: 4 }
+    columns.value = stored ? Math.max(1, Math.min(6, parseInt(stored))) : (defaults[deviceType.value] || 3)
   } catch { /* ignore */ }
 }
 
@@ -143,7 +162,7 @@ async function saveSessdata() {
 
 async function saveColumns() {
   try {
-    await api.updateSettings({ columns_per_row: String(columns.value) })
+    localStorage.setItem(getColumnsKey(deviceType.value), String(columns.value))
   } catch { /* ignore */ }
 }
 

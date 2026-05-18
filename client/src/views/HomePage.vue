@@ -35,7 +35,21 @@
       >添加视频</button>
     </div>
 
-    <!-- Grid -->
+    <!-- Grid (mobile: horizontal scroll only, vertical handled by <main>) -->
+    <div v-else-if="isMobile" class="mobile-grid-scroll">
+      <div class="grid gap-3" :style="gridStyle" style="width: max-content">
+        <Cylinder3D
+          v-for="video in videos"
+          :key="video.id"
+          :progress="video.progress"
+          :custom-name="video.custom_name"
+          :full-title="video.title"
+          @click="onEditVideo(video)"
+        />
+      </div>
+    </div>
+
+    <!-- Grid (tablet / desktop: fluid columns) -->
     <div v-else class="grid gap-3" :style="gridStyle">
       <Cylinder3D
         v-for="video in videos"
@@ -89,27 +103,80 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, nextTick } from 'vue'
 import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
 
+// Device type detection via screen width breakpoints
+const MOBILE_BREAKPOINT = 768
+const TABLET_BREAKPOINT = 1024
+const MOBILE_CYLINDER_WIDTH = 140  // px — fixed column width for mobile grid
+
+function getDeviceType() {
+  const w = window.innerWidth
+  if (w <= MOBILE_BREAKPOINT) return 'mobile'
+  if (w <= TABLET_BREAKPOINT) return 'tablet'
+  return 'desktop'
+}
+
+function getColumnsKey(deviceType) {
+  return `columns_${deviceType}`
+}
+
+function getLocalColumns(deviceType) {
+  const stored = localStorage.getItem(getColumnsKey(deviceType))
+  if (stored) return Math.max(1, Math.min(6, parseInt(stored) || 2))
+  const defaults = { mobile: 2, tablet: 3, desktop: 4 }
+  return defaults[deviceType] || 3
+}
+
 const videos = ref([])
 const loading = ref(true)
 const columns = ref(3)
+const deviceType = ref(getDeviceType())
 const showAdd = ref(false)
 const syncProblem = inject('syncProblem', ref(false))
 const editingVideo = ref(null)
 const editName = ref('')
 const editInput = ref(null)
 
-const gridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${columns.value}, 1fr)`
-}))
+const isMobile = computed(() => deviceType.value === 'mobile')
+
+const gridStyle = computed(() => {
+  if (isMobile.value) {
+    // Fixed-size columns — uniform cylinder size regardless of viewport width
+    return {
+      gridTemplateColumns: `repeat(${columns.value}, ${MOBILE_CYLINDER_WIDTH}px)`
+    }
+  }
+  return {
+    gridTemplateColumns: `repeat(${columns.value}, 1fr)`
+  }
+})
+
+// Debounced resize handler
+let resizeTimer = null
+function onResize() {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    const newType = getDeviceType()
+    if (newType !== deviceType.value) {
+      deviceType.value = newType
+      columns.value = getLocalColumns(newType)
+    }
+  }, 150)
+}
 
 onMounted(async () => {
+  window.addEventListener('resize', onResize)
   await loadVideos()
   await loadSettings()
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  clearTimeout(resizeTimer)
 })
 
 async function loadVideos() {
@@ -122,10 +189,7 @@ async function loadVideos() {
 
 async function loadSettings() {
   try {
-    const s = await api.getSettings()
-    if (s.columns_per_row) {
-      columns.value = Math.max(1, Math.min(6, parseInt(s.columns_per_row) || 3))
-    }
+    columns.value = getLocalColumns(deviceType.value)
   } catch { /* ignore */ }
 }
 
@@ -151,3 +215,18 @@ async function saveEditName() {
   editingVideo.value = null
 }
 </script>
+
+<style scoped>
+/*
+  Mobile grid scroll container.
+  Height: viewport minus header area (~64px) and bottom nav (~60px).
+  Enables both horizontal and vertical scrolling on touch devices.
+*/
+.mobile-grid-scroll {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  padding-bottom: 8px;
+}
+</style>
