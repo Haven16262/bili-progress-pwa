@@ -13,6 +13,11 @@ export function getDb() {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
     initSchema()
+    // WAL checkpoint every hour — prevents WAL from growing unboundedly
+    // when a long-lived connection blocks autocheckpoint's TRUNCATE phase.
+    setInterval(() => {
+      db.pragma('wal_checkpoint(TRUNCATE)')
+    }, 60 * 60 * 1000)
   }
   return db
 }
