@@ -5,3 +5,6 @@ dist/
 *.db-*
 *.sqlite
 server/backups/
+
+# 迁移后待办（含部署细节，不公开）
+KNOWN-ISSUES.md
