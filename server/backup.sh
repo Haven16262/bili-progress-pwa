@@ -7,8 +7,8 @@ set -euo pipefail
 #   SRC=/path/to/server/data.db BACKUP_DIR=/path/to/backups ./backup.sh
 # Or edit the defaults below to match your deployment.
 
-SRC="${SRC:-/path/to/your/server/data.db}"
-BACKUP_DIR="${BACKUP_DIR:-/path/to/your/backups}"
+SRC="${SRC:-/root/workspace/projects/bili-progress-pwa/server/data.db}"
+BACKUP_DIR="${BACKUP_DIR:-/root/workspace/projects/bili-progress-pwa/server/backups}"
 
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
