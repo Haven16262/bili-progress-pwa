@@ -60,6 +60,12 @@ function initSchema() {
     );
   `)
 
+  // Migrations: add columns that may not exist in older data.db
+  const cols = db.pragma('table_info(videos)').map(c => c.name)
+  if (!cols.includes('manually_completed')) {
+    db.exec('ALTER TABLE videos ADD COLUMN manually_completed INTEGER NOT NULL DEFAULT 0')
+  }
+
   // Seed default settings if not present
   const seed = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   seed.run('sessdata', '')

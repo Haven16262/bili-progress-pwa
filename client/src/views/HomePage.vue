@@ -71,15 +71,14 @@
     <!-- Edit name modal -->
     <div
       v-if="editingVideo"
-      class="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      class="fixed inset-0 z-[51] flex items-center justify-center px-4"
       @click.self="editingVideo = null"
     >
       <div class="absolute inset-0 bg-black/60"></div>
-      <div class="relative bg-slate-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 pb-8 sm:pb-5 shadow-xl">
+      <div class="relative bg-slate-800 rounded-2xl w-full sm:max-w-sm p-5 pb-5 shadow-xl max-h-[85dvh] overflow-y-auto">
         <h3 class="text-sm font-semibold mb-3">修改显示名称</h3>
         <p class="text-xs text-slate-400 mb-3 truncate">{{ editingVideo.title }}</p>
         <input
-          ref="editInput"
           v-model="editName"
           type="text"
           maxlength="256"
@@ -97,13 +96,17 @@
             class="flex-1 py-2 bg-cyan-500 text-black rounded-lg text-sm font-semibold"
           >保存</button>
         </div>
+        <button
+          @click="markCompleted"
+          class="w-full mt-2 py-2 bg-slate-700 hover:bg-slate-600 text-slate-400 text-sm rounded-lg transition"
+        >标记为已看完</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
@@ -139,7 +142,6 @@ const showAdd = ref(false)
 const syncProblem = inject('syncProblem', ref(false))
 const editingVideo = ref(null)
 const editName = ref('')
-const editInput = ref(null)
 
 const isMobile = computed(() => deviceType.value === 'mobile')
 
@@ -201,7 +203,6 @@ function onVideoAdded() {
 function onEditVideo(video) {
   editingVideo.value = video
   editName.value = video.custom_name || ''
-  nextTick(() => editInput.value?.focus())
 }
 
 async function saveEditName() {
@@ -213,6 +214,19 @@ async function saveEditName() {
     if (target) target.custom_name = name
   } catch { /* ignore */ }
   editingVideo.value = null
+}
+
+async function markCompleted() {
+  if (!editingVideo.value) return
+  if (!window.confirm('确定要将该视频标记为已看完吗？')) return
+  try {
+    const res = await api.markVideoCompleted(editingVideo.value.id)
+    if (res.ok || res.error === undefined) {
+      const target = videos.value.find(item => item.id === editingVideo.value.id)
+      if (target) target.progress = 100
+      editingVideo.value = null
+    }
+  } catch { /* ignore */ }
 }
 </script>
 

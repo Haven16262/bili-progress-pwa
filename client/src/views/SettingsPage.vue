@@ -82,6 +82,25 @@
       <p class="text-xs text-slate-500">定时任务每天 03:07 自动执行</p>
     </section>
 
+    <!-- Completed Videos -->
+    <section class="bg-slate-800 rounded-xl p-4">
+      <details>
+        <summary class="font-semibold text-sm cursor-pointer select-none">已观看完视频</summary>
+        <div class="mt-3 space-y-2">
+          <p v-if="completedVideos.length === 0" class="text-xs text-slate-500">暂无已看完的视频</p>
+          <div
+            v-for="v in completedVideos"
+            :key="v.id"
+            class="flex items-center justify-between text-sm"
+          >
+            <span class="text-slate-300 truncate mr-2">{{ v.custom_name || v.title }}</span>
+            <span v-if="v.archived" class="text-xs text-slate-500 shrink-0">已归档</span>
+            <span v-else class="text-xs text-green-400 shrink-0">已看完</span>
+          </div>
+        </div>
+      </details>
+    </section>
+
     <!-- Info -->
     <section class="bg-slate-800/50 rounded-xl p-4 text-xs text-slate-500 space-y-1">
       <p>Bili Progress PWA v1.0</p>
@@ -120,10 +139,12 @@ const columns = ref(isMobile.value ? 2 : 3)
 const syncing = ref(false)
 
 const syncStatus = ref({ status: 'never', message: '', at: null })
+const completedVideos = ref([])
 
 onMounted(() => {
   loadSettings()
   loadSyncStatus()
+  loadCompletedVideos()
 })
 
 async function loadSettings() {
@@ -187,6 +208,13 @@ async function triggerSync() {
     syncStatus.value = { status: 'failed', message: '网络错误', at: new Date().toISOString() }
   }
   syncing.value = false
+}
+
+async function loadCompletedVideos() {
+  try {
+    const data = await api.getCompletedVideos()
+    completedVideos.value = Array.isArray(data) ? data : []
+  } catch { /* ignore */ }
 }
 
 function formatTime(iso) {

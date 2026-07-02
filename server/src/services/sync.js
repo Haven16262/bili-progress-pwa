@@ -16,7 +16,8 @@ import {
   insertSyncLog,
   getPageCache,
   setPageCache,
-  getProgress100Map
+  getProgress100Map,
+  getManuallyCompletedBvids
 } from '../db/queries.js'
 import { decryptSessdata } from './crypto.js'
 
@@ -119,6 +120,7 @@ export async function runSync() {
   // 3. Pre-load local data for efficient lookups
   const localBvids = new Set(getAllBvids())
   const progress100Map = getProgress100Map()  // bvid → progress_100_count
+  const manuallyCompletedSet = new Set(getManuallyCompletedBvids())
   const pageCache = new Map()
   let updatedCount = 0
   let archivedCount = 0
@@ -126,6 +128,9 @@ export async function runSync() {
   // 4. Process each B站 history entry that exists locally
   for (const video of history) {
     if (!localBvids.has(video.bvid)) continue
+
+    // Skip manually-completed videos — they're handled in a separate pass below
+    if (manuallyCompletedSet.has(video.bvid)) continue
 
     let progressPct
     let effectiveDuration
@@ -164,6 +169,20 @@ export async function runSync() {
     }
 
     updatedCount++
+  }
+
+  // 4b. Manually-completed videos: advance archive countdown independently
+  //     These videos are skipped from B站 data refresh above; their progress
+  //     stays at 100 (set by markVideoCompleted) and we just count ticks.
+  for (const bvid of manuallyCompletedSet) {
+    const newCount = (progress100Map.get(bvid) || 0) + 1
+    updateProgress100Count(bvid, newCount)
+    progress100Map.set(bvid, newCount)
+
+    if (newCount >= 3) {
+      archiveVideo(bvid)
+      archivedCount++
+    }
   }
 
   // 5. Log success

@@ -38,5 +38,11 @@ export const api = {
     fetch(`${BASE}/settings`, { method: 'PUT', headers: headers(), body: JSON.stringify(settings) }).then(r => r.json()),
 
   getSyncStatus: () =>
-    fetch(`${BASE}/sync/status`, { headers: headers() }).then(r => r.json())
+    fetch(`${BASE}/sync/status`, { headers: headers() }).then(r => r.json()),
+
+  markVideoCompleted: (id) =>
+    fetch(`${BASE}/videos/${id}/complete`, { method: 'POST', headers: headers() }).then(r => r.json()),
+
+  getCompletedVideos: () =>
+    fetch(`${BASE}/videos/completed`, { headers: headers() }).then(r => r.json())
 }

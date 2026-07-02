@@ -5,7 +5,9 @@ import {
   getVideoByBvid,
   insertVideo,
   updateVideo,
-  deleteVideo
+  deleteVideo,
+  markVideoCompleted,
+  listCompletedVideos
 } from '../db/queries.js'
 
 const router = Router()
@@ -79,6 +81,24 @@ router.delete('/:id', (req, res) => {
     return res.status(404).json({ error: '视频未找到' })
   }
   res.json({ ok: true })
+})
+
+// POST /api/videos/:id/complete — mark video as manually completed
+router.post('/:id/complete', (req, res) => {
+  const id = Number(req.params.id)
+  if (!id) return res.status(400).json({ error: '无效的 ID' })
+
+  const result = markVideoCompleted(id)
+  if (result.changes === 0) {
+    return res.status(404).json({ error: '视频未找到' })
+  }
+  res.json({ ok: true })
+})
+
+// GET /api/videos/completed — list all completed/archived videos
+router.get('/completed', (_req, res) => {
+  const videos = listCompletedVideos()
+  res.json(videos)
 })
 
 export default router

@@ -87,6 +87,23 @@ export function getProgress100Map() {
   return new Map(rows.map(r => [r.bvid, r.progress_100_count || 0]))
 }
 
+export function markVideoCompleted(id) {
+  const db = getDb()
+  return db.prepare(`
+    UPDATE videos SET progress = 100, manually_completed = 1, updated_at = datetime('now') WHERE id = ?
+  `).run(id)
+}
+
+export function getManuallyCompletedBvids() {
+  const db = getDb()
+  return db.prepare('SELECT bvid FROM videos WHERE manually_completed = 1 AND archived = 0').all().map(r => r.bvid)
+}
+
+export function listCompletedVideos() {
+  const db = getDb()
+  return db.prepare('SELECT * FROM videos WHERE progress >= 100 OR archived = 1 ORDER BY updated_at DESC').all()
+}
+
 // ── Settings ──
 
 export function getSetting(key) {
