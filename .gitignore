@@ -6,5 +6,8 @@ dist/
 *.sqlite
 server/backups/
 
+# Claude Code 自动生成（临时产物，不纳入版本控制）
+.claude/plans/
+
 # 迁移后待办（含部署细节，不公开）
 KNOWN-ISSUES.md
