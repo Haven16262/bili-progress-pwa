@@ -9,13 +9,33 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**上一阶段：** 多P进度卡死修复 — 一键标记完成观看（已完成并 commit `cf4cf1e`，详见 `context_history.md`）
+**阶段:** Phase — 同步引擎正确性 + 效率
+**当前任务:** 修复归档倒计时语义 bug、全量翻爬风控风险、单P负缓存、并发锁；核心算法先补测试（TDD）
+**关键依据文档:** `docs/architecture-review-2026-07-04.md`（问题编号 H1/H2/M1/M5/M6 对应本轮）
 
-_当前无进行中任务，等待全局者写入下一阶段方向。_
+**任务清单(给工作者):**
 
-**Backlog（下轮可选，建议凑一个代码质量小轮）：**
-- `server/src/routes/videos.js` 三处 `:id` 校验统一改为 `Number.isInteger(id) && id > 0`（critic MEDIUM）
-- `client/src/components/AddVideoModal.vue` 与编辑弹窗同病：`z-50` + 手机底部贴边会被 BottomNav 遮底部，改为 `z-[51]` + 居中
+- [ ] 1. 测试打底（M6 核心部分）：server 引入 vitest；为 `computeGlobalProgress` / `computeEpisodeProgress` 写单测（多P正常、cid 不在 pages、totalDuration=0、单P回退）；为归档计数逻辑写测试（用内存 SQLite，构造同日两次 / 跨日两次场景）——任务 2 的新行为测试必须先写并先 FAIL（完成标准：`npm test` 全绿，且任务 2 实现前相关测试确实先失败过）
+- [ ] 2. H1 归档按日历日计数：同一天内多次 `runSync` 对同一视频只递增一次 `progress_100_count`（含 4b 手动完成分支）。方案：`videos` 表加 `progress_100_date TEXT` 列记录最近递增日期，递增前比对当天日期，旧库迁移仿照 `manually_completed` 的 ALTER TABLE 模式（完成标准：同日连跑两次 runSync count 只 +1；跨日再跑 +1；测试覆盖）
+- [ ] 3. H2 `fetchAllHistory` 改造三件套：① 本地追踪的 bvid 全部命中后提前终止翻页（需把 localBvids 传入或改为回调判断）② 页数硬上限 50 页 ③ 页间 250ms 延时（完成标准：追踪视频全部命中时不再继续翻页；上限与延时有常量命名）
+- [ ] 4. M5 同步并发锁：`sync.js` 模块级布尔锁，`runSync` 进行中时再次调用直接返回；`POST /api/sync` 对此返回 409 `{ error: '同步进行中，请稍候' }`（完成标准：并发第二次调用不执行任何 DB 写入）
+- [ ] 5. M1 单P负缓存：`page_cache` 允许记录 `page_count<=1` 的条目，`getPagesInfo` 命中即返回 null 语义，7 天内不再对单P视频请求 view API（完成标准：连续两次 runSync，第二次对单P视频零 view 请求——可用日志或测试桩验证）
+- [ ] 6. 回归验证：client 无改动不用 build；PM2 重启、手动触发同步一轮成功、首页数据无回退。**遵守测试纪律：不拿真实业务记录当靶子，测试库用内存/临时文件**
+
+**Scope 边界：** 本轮不动前端（H3/M2/M3 留下一轮）；不做 M4 密钥解耦；不改归档「软隐藏」机制。
+
+**待办（非工作者任务）：**
+- [ ] 架构评审文档 + context 归档变更未 commit（建议 `chore: 架构评审 + Phase 开启归档`，可由工作者随本轮一起提）
+- [ ] 用户真机确认 M2：手机打开「添加视频」弹窗，看 B站 封面图是否正常显示（决定 M2 是否进下一轮）
+
+**Backlog（下轮「前端体验轮」候选，详见评审文档）：**
+- H3 设置页 SESSDATA「已设置」徽章永远显示未设置（服务端加 `sessdata_set` 布尔）
+- M2 CSP `imgSrc` 缺 `https://*.hdslb.com`，疑似封面图被阻断（待用户真机确认）
+- M3 api.js 统一错误/401 处理 + App.vue 裸 fetch 收编
+- L1 `videos.js` 三处 `:id` 校验改 `Number.isInteger(id) && id > 0`（critic MEDIUM）
+- L2 AddVideoModal `z-50`/手机贴边 → `z-[51]` + 居中
+- L3 AddVideoModal `addOne` 与 HomePage `markCompleted` 的错误判断语义混乱
+- M4/L4/L5/L6 顺手项：密钥耦合注释、updateVideo 白名单收紧、settings PUT 存根删除、columns_per_row 停止 seed
 
 ---
 
@@ -30,6 +50,8 @@ _当前无进行中任务，等待全局者写入下一阶段方向。_
 - **手动完成视频不参与同步重算**：`manually_completed=1` 的视频永久跳过每日同步的 B站 数据重算，只走归档倒计时，不会被真实观看记录覆盖回低进度
 - **「已观看完视频」定义**：`progress>=100 OR archived=1`，不区分是手动标记还是自然看完达成
 - **归档 = 永久软隐藏，非删除**：`archived=1` 只从首页列表隐藏，记录永久保留在数据库，没有自动删除机制，也不新增（用户已确认维持现状）
+- **归档倒计时按日历日计**：「进度 100% 持续 3 天归档」中的一天 = 一个日历日，同日多次同步不重复计数（2026-07-04 架构评审 H1 决策，本 Phase 实现）
+- **B站 请求节制**：历史翻页必须有提前终止 + 页数上限 + 页间延时，防触发风控（2026-07-04 架构评审 H2 决策）
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **原生模块 ABI 迁移雷区（教训）**：`server/node_modules` 是 2026-05-22 在旧 DO 服务器（旧 Node 版本）装的，随项目一起搬到 Hetzner（06-24），但没人针对新机器的 Node 22 重新编译过。进程只有在重启那一刻才会因 `better-sqlite3` 原生插件 ABI 不匹配而崩溃（`ERR_DLOPEN_FAILED`），所以中间十天服务没重启，一直正常，直到 07-04 一次普通重启才暴露、连崩 7 次后 PM2 daemon 一并挂掉，导致 502。现已加 `server/scripts/start.sh` 自愈：启动前探测 ABI 不匹配则自动 `npm rebuild better-sqlite3` 再起服务；PM2 已切换为跑该脚本（`pm2 start scripts/start.sh --interpreter bash` + `pm2 save`），`npm start` 同步指向该脚本。以后任何原生模块迁移/Node 升级场景都有兜底。
 
@@ -39,22 +61,14 @@ _当前无进行中任务，等待全局者写入下一阶段方向。_
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-07-02 18:30] 全局者 — Phase 关闭：多P进度卡死修复
+## [2026-07-04 20:10] 全局者 — Phase 启动：同步引擎正确性 + 效率
 
-**交付汇总：**
-- `videos` 表新增 `manually_completed` 列（含旧库 ALTER TABLE 迁移）
-- 新增 `POST /api/videos/:id/complete`、`GET /api/videos/completed`（requireAuth 覆盖）
-- `runSync` 双阶段：手动完成视频跳过 B站 重算 + 独立归档倒计时（满 3 天 `archived=1`）
-- 主页编辑弹窗：「标记为已看完」按钮（confirm 确认）、全尺寸居中、`z-[51]`、去自动聚焦
-- 设置页：`<details>` 折叠「已观看完视频」列表（默认收起，刷新即复位）
-- 顺带修复：工作者测试残留脏数据（OS progress 经同步自愈回 37.11）
+**背景：** 用户发起项目架构分析。全局者通读全部源码（~2100 行）后产出 `docs/architecture-review-2026-07-04.md`：架构分层健康、安全基线扎实，但发现 3 HIGH / 6 MEDIUM。其中 H1（归档倒计时按同步次数而非天数计，一天点 3 次「立即同步」即当天归档）为用户可感知的正确性 bug；H2（每日全量翻爬整个 B站历史，无上限无延时）为最大外部风险面（风控）。两者同在 `sync.js`，打包为一轮最省。
 
-**Commit 链：** `cf4cf1e` feat（本 Phase 全部代码）；工作流三段式升级 + 本次归档见后续 chore commit
+**决策：**
+1. 本轮做 H1/H2/M1/M5 + 核心算法测试打底（M6 部分），任务清单见「当前状态」
+2. 前端项（H3/M2/M3 + L1/L2/L3）留下一轮「前端体验轮」
+3. 新增两条跨 Phase 约定：归档按日历日计、B站 请求节制（见上方约定区块）
+4. 方向经用户确认（AskUserQuestion 选定「同步引擎轮」）
 
-**Critic 总览：** 1 次审查（新增写接口），结论可放行；1 个 MEDIUM（`:id` 校验偏松）入 backlog
-
-**Backlog：** 见「当前状态」区块
-
-**真机验证：** 用户确认通过（弹窗居中、三按钮可见可点、无自动键盘、折叠列表正常）
-
-**完整轮次原文：** 已归档 `context_history.md`「Phase：多P进度卡死修复」段
+**移交工作者：** 按任务 1→6 顺序执行，任务 2 的行为变更测试先行（先 FAIL 再实现）。涉及外部请求与 DB 迁移，完成后切回全局者，将按规矩 invoke critic 审查 `sync.js` / `bilibili.js` / `init.js`。

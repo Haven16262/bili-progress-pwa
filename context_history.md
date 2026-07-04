@@ -297,3 +297,25 @@ security-reviewer 审查本轮改动，发现 2 处 MEDIUM + 1 处 LOW，全部�
 - 未解决的疑虑：无
 
 **触发切换：** 完成完整模块（补丁 D/E/F/G），触发「工作者 → 全局者」条件 #3，请切换到全局者确认方向。
+
+---
+
+# Phase 关闭总结归档：多P进度卡死修复
+
+## [2026-07-02 18:30] 全局者 — Phase 关闭：多P进度卡死修复
+
+**交付汇总：**
+- `videos` 表新增 `manually_completed` 列（含旧库 ALTER TABLE 迁移）
+- 新增 `POST /api/videos/:id/complete`、`GET /api/videos/completed`（requireAuth 覆盖）
+- `runSync` 双阶段：手动完成视频跳过 B站 重算 + 独立归档倒计时（满 3 天 `archived=1`）
+- 主页编辑弹窗：「标记为已看完」按钮（confirm 确认）、全尺寸居中、`z-[51]`、去自动聚焦
+- 设置页：`<details>` 折叠「已观看完视频」列表（默认收起，刷新即复位）
+- 顺带修复：工作者测试残留脏数据（OS progress 经同步自愈回 37.11）
+
+**Commit 链：** `cf4cf1e` feat（本 Phase 全部代码）；工作流三段式升级 + 本次归档见后续 chore commit
+
+**Critic 总览：** 1 次审查（新增写接口），结论可放行；1 个 MEDIUM（`:id` 校验偏松）入 backlog
+
+**Backlog：** `:id` 校验统一；AddVideoModal z-index/贴边（已并入 2026-07-04 架构评审 backlog）
+
+**真机验证：** 用户确认通过（弹窗居中、三按钮可见可点、无自动键盘、折叠列表正常）
