@@ -319,3 +319,87 @@ security-reviewer 审查本轮改动，发现 2 处 MEDIUM + 1 处 LOW，全部�
 **Backlog：** `:id` 校验统一；AddVideoModal z-index/贴边（已并入 2026-07-04 架构评审 backlog）
 
 **真机验证：** 用户确认通过（弹窗居中、三按钮可见可点、无自动键盘、折叠列表正常）
+
+---
+
+## Phase：同步引擎正确性 + 效率（进行中，本段历史归档于 2026-07-05）
+
+## [2026-07-04 20:10] 全局者 — Phase 启动：同步引擎正确性 + 效率
+
+**背景：** 用户发起项目架构分析。全局者通读全部源码（~2100 行）后产出 `docs/architecture-review-2026-07-04.md`：架构分层健康、安全基线扎实，但发现 3 HIGH / 6 MEDIUM。其中 H1（归档倒计时按同步次数而非天数计，一天点 3 次「立即同步」即当天归档）为用户可感知的正确性 bug；H2（每日全量翻爬整个 B站历史，无上限无延时）为最大外部风险面（风控）。两者同在 `sync.js`，打包为一轮最省。
+
+**决策：**
+1. 本轮做 H1/H2/M1/M5 + 核心算法测试打底（M6 部分），任务清单见「当前状态」
+2. 前端项（H3/M2/M3 + L1/L2/L3）留下一轮「前端体验轮」
+3. 新增两条跨 Phase 约定：归档按日历日计、B站 请求节制（见上方约定区块）
+4. 方向经用户确认（AskUserQuestion 选定「同步引擎轮」）
+
+**移交工作者：** 按任务 1→6 顺序执行，任务 2 的行为变更测试先行（先 FAIL 再实现）。涉及外部请求与 DB 迁移，完成后切回全局者，将按规矩 invoke critic 审查 `sync.js` / `bilibili.js` / `init.js`。
+
+## [2026-07-05 03:52] 工作者 — 任务 1 测试打底完成
+
+**完成情况：** server 安装 vitest，新建 `tests/sync.test.js`（19 条用例），`npm test` 结果：17 pass / 2 fail。2 条失败正是 Task 2 新行为测试（同日不重复计数 × 2），确认 TDD RED 阶段生效。
+
+**任务进度：**
+- [x] 任务 1（纯函数 13 条全绿 + 归档集成 4/6 绿 + 2 条新行为 RED）
+- [ ] 任务 2（就绪，下一步实现日历日计数让 2 RED → GREEN）
+
+**关键决策点：**
+- 架构/接口变动：`init.js` 加 `process.env.TEST_DB` 支持内存 SQLite（`getDb()` 不变）
+- 安全相关：无
+- 偏离原计划：无
+- 未解决的疑虑：无
+
+## [2026-07-05 03:54] 工作者 — 任务 2 H1 归档日历日计数完成
+
+**完成情况：** `init.js` 加 `progress_100_date TEXT` 列迁移；`queries.js` 加 `getProgress100DateMap()` + `updateProgress100Count` 支持可选 date 参数；`sync.js` 两处归档计数（section 4 主循环 + 4b 手动完成）加 `lastDate !== today` 守卫。测试 19/19 全绿。
+
+**任务进度：**
+- [x] 任务 1
+- [x] 任务 2
+- [ ] 任务 3（就绪）
+
+**关键决策点：**
+- 架构/接口变动：`videos` 表加 `progress_100_date TEXT`；`updateProgress100Count(bvid, count, date?)` date 参数可选（向后兼容）；`getProgress100DateMap()` 新增
+- 安全相关：SQL（ALTER TABLE 迁移 + UPDATE 日期列），均为参数化查询，无注入风险
+- 偏离原计划：无
+- 未解决的疑虑：无
+
+## [2026-07-05 03:59] 工作者 — 任务 2-5 全部代码完成，移交全局者审查
+
+**完成情况：** 按 TDD 流程完成本轮全部 5 项代码任务（任务 1 的 21 条测试 + 任务 2-5 实现），`npm test` 21/21 全绿。
+
+**任务进度：**
+- [x] 任务 1 — vitest + 21 条测试
+- [x] 任务 2 — H1 `progress_100_date` 列 + 日历日守卫
+- [x] 任务 3 — H2 `fetchAllHistory` 三件套（早停 + 50页上限 + 250ms延时）
+- [x] 任务 4 — M5 `syncing` 锁 + POST 409
+- [x] 任务 5 — M1 单P负缓存
+- [ ] 任务 6（回归验证需生产环境操作）
+
+**关键决策点：**
+- 架构/接口变动：① `videos` 加 `progress_100_date TEXT` → init.js ALTER TABLE ② `updateProgress100Count(bvid, count, date?)` date 可选 ③ `getProgress100DateMap()` 新增 ④ `fetchAllHistory(sessdata, opts?)` 含 `{ localBvids, maxPages, pageDelayMs }` ⑤ `getPagesInfo` 负缓存增强 ⑥ `init.js` 支持 `TEST_DB` 环境变量
+- 安全相关：SQL（ALTER TABLE + UPDATE + SELECT，全参数化查询，无注入风险）；外部请求（`fetchAllHistory` 页间延时 + 上限防风控）
+- 偏离原计划：无
+- 未解决的疑虑：① `fetchAllHistory` 三项仅通过 mock 测试验证，建议回归时至少跑一次真实 runSync 确认不触发风控 ② `data.db` 的 ALTER TABLE 迁移首次启动才执行，回归时确认无报错
+
+## [2026-07-05 04:05] 全局者 — critic 审查通过，放行 + 两处收尾
+
+**背景：** 工作者交付任务 2-5，「安全相关」非空（SQL 迁移 + 外部请求）。安全预检脚本命中 121 处但核实全部来自 `server/package-lock.json`（新增 vitest 依赖锁文件的 `https://` URL 行），源码本身零命中。按规则仍 invoke critic 子代理，对 `sync.js`/`bilibili.js`/`init.js`/`queries.js`/`routes/sync.js` 做结构化审查。
+
+**critic 审查结论：可放行，无 CRITICAL/HIGH。**
+- SQL 参数化 ✓：`updateProgress100Count` 等新增查询全部走 `?` 占位符；`updateVideo()` 列名拼接受白名单保护（非注入风险，[LOW] 建议加注释说明）
+- ALTER TABLE 迁移 ✓：列存在性检查保证幂等，可重复执行不报错
+- 并发锁 ✓：`syncing` 布尔在首个 `await` 之前完成检查+设置，单线程事件循环下无竞态窗口；`finally` 块确保异常路径也释放锁
+- 单P负缓存 ✓：`null`/`pageCount<=1` 语义链路验证无误判多P为单P的风险
+- 风控三件套 ✓：50 页硬上限、250ms 页间延时、localBvids 全命中提前终止，三者均在函数内部无法被绕过
+- 日历日守卫 ✓：ISO 日期字符串比较，主循环与 4b 手动完成分支均正确
+- [MEDIUM] `init.js`：`TEST_DB` 环境变量若在生产环境被意外设置会导致误连错误数据库，建议加校验/警告日志
+
+**决策：**
+1. 任务 2-5 代码批准，`npm test` 复核 21/21 全绿
+2. 工作者顺手补两处 critic 建议（判断为收尾级别，非独立任务，本轮一并做完）：① `init.js` DB_PATH 解析处，若 `TEST_DB` 被设置且 `NODE_ENV !== 'test'`，打印一行警告日志（不阻断启动，只提示）；② `queries.js` `updateVideo()` 顶部加一行注释说明列名拼接为何安全（白名单保护，非用户输入）
+3. 任务 6（生产环境回归验证）非工作者可执行项，维持「待办（非工作者任务）」，等用户操作
+4. 完成两处收尾后工作者可直接 commit 本轮全部改动（不含架构评审文档，那是独立 chore commit）
+
+**移交工作者：** 补两处收尾（① TEST_DB 警告日志 ② updateVideo 注释）→ `npm test` 确认仍 21/21 → commit。之后回全局者确认收尾完成即可关闭本轮代码工作，等待用户做生产回归。

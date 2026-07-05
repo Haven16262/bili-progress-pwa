@@ -17,11 +17,14 @@ import {
   getPageCache,
   setPageCache,
   getProgress100Map,
+  getProgress100DateMap,
   getManuallyCompletedBvids
 } from '../db/queries.js'
 import { decryptSessdata } from './crypto.js'
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
+
+let syncing = false
 
 // ── SESSDATA helpers ──
 
@@ -57,6 +60,11 @@ async function getPagesInfo(bvid, sessdata, pageCache) {
   if (cached) {
     const age = Date.now() - new Date(cached.cachedAt).getTime()
     if (age < CACHE_TTL_MS) {
+      // Negative cache: single-P video → return null semantics
+      if (cached.pageCount <= 1) {
+        pageCache.set(bvid, null)
+        return null
+      }
       const info = { pages: cached.pages, totalDuration: cached.totalDuration }
       pageCache.set(bvid, info)
       return info
@@ -67,6 +75,9 @@ async function getPagesInfo(bvid, sessdata, pageCache) {
   const info = await fetchVideoPages(bvid, sessdata)
   if (info) {
     setPageCache(bvid, info.pages, info.totalDuration)
+  } else {
+    // Cache the negative result (single-P) to avoid re-fetching for 7 days
+    setPageCache(bvid, [], 0)
   }
   pageCache.set(bvid, info)
   return info
@@ -85,10 +96,16 @@ function logFailure(msg, statusMsg, syncLogMsg) {
  * Main sync: pull B站 history, update local DB, handle archiving.
  */
 export async function runSync() {
-  const sessdata = getSessdata()
-  if (!sessdata) {
-    return logFailure('未配置 SESSDATA', '同步失败：未配置 SESSDATA', '同步失败：未配置 SESSDATA')
+  if (syncing) {
+    return { ok: false, locked: true }
   }
+  syncing = true
+
+  try {
+    const sessdata = getSessdata()
+    if (!sessdata) {
+      return logFailure('未配置 SESSDATA', '同步失败：未配置 SESSDATA', '同步失败：未配置 SESSDATA')
+    }
 
   // 1. Verify session
   let nav
@@ -105,10 +122,13 @@ export async function runSync() {
     )
   }
 
-  // 2. Fetch all history from B站
+  // 2. Pre-load local bvids for early-termination during history fetch
+  const localBvids = new Set(getAllBvids())
+
+  // 3. Fetch all history from B站 (stops early when all local bvids found)
   let history
   try {
-    history = await fetchAllHistory(sessdata)
+    history = await fetchAllHistory(sessdata, { localBvids })
   } catch (err) {
     return logFailure(
       '无法获取 B 站数据，请确认 SESSDATA 有效并稍后重试',
@@ -117,15 +137,16 @@ export async function runSync() {
     )
   }
 
-  // 3. Pre-load local data for efficient lookups
-  const localBvids = new Set(getAllBvids())
+  // 4. Pre-load remaining local data for efficient lookups
   const progress100Map = getProgress100Map()  // bvid → progress_100_count
+  const progress100DateMap = getProgress100DateMap()  // bvid → progress_100_date
   const manuallyCompletedSet = new Set(getManuallyCompletedBvids())
   const pageCache = new Map()
+  const today = new Date().toISOString().slice(0, 10)  // 'YYYY-MM-DD'
   let updatedCount = 0
   let archivedCount = 0
 
-  // 4. Process each B站 history entry that exists locally
+  // 5. Process each B站 history entry that exists locally
   for (const video of history) {
     if (!localBvids.has(video.bvid)) continue
 
@@ -151,41 +172,51 @@ export async function runSync() {
       duration: effectiveDuration
     })
 
-    // Handle archiving
+    // Handle archiving (calendar-day gating: same day → skip tick)
     if (progressPct >= 100) {
-      const newCount = (progress100Map.get(video.bvid) || 0) + 1
-      updateProgress100Count(video.bvid, newCount)
-      progress100Map.set(video.bvid, newCount)
+      const lastDate = progress100DateMap.get(video.bvid) || null
+      if (lastDate !== today) {
+        const newCount = (progress100Map.get(video.bvid) || 0) + 1
+        updateProgress100Count(video.bvid, newCount, today)
+        progress100Map.set(video.bvid, newCount)
+        progress100DateMap.set(video.bvid, today)
 
-      if (newCount >= 3) {
-        archiveVideo(video.bvid)
-        archivedCount++
+        if (newCount >= 3) {
+          archiveVideo(video.bvid)
+          archivedCount++
+        }
       }
     } else {
       if ((progress100Map.get(video.bvid) || 0) > 0) {
-        updateProgress100Count(video.bvid, 0)
+        updateProgress100Count(video.bvid, 0, null)
         progress100Map.set(video.bvid, 0)
+        progress100DateMap.set(video.bvid, null)
       }
     }
 
     updatedCount++
   }
 
-  // 4b. Manually-completed videos: advance archive countdown independently
+  // 5b. Manually-completed videos: advance archive countdown independently
   //     These videos are skipped from B站 data refresh above; their progress
   //     stays at 100 (set by markVideoCompleted) and we just count ticks.
+  //     Calendar-day gating: same day → skip tick.
   for (const bvid of manuallyCompletedSet) {
-    const newCount = (progress100Map.get(bvid) || 0) + 1
-    updateProgress100Count(bvid, newCount)
-    progress100Map.set(bvid, newCount)
+    const lastDate = progress100DateMap.get(bvid) || null
+    if (lastDate !== today) {
+      const newCount = (progress100Map.get(bvid) || 0) + 1
+      updateProgress100Count(bvid, newCount, today)
+      progress100Map.set(bvid, newCount)
+      progress100DateMap.set(bvid, today)
 
-    if (newCount >= 3) {
-      archiveVideo(bvid)
-      archivedCount++
+      if (newCount >= 3) {
+        archiveVideo(bvid)
+        archivedCount++
+      }
     }
   }
 
-  // 5. Log success
+  // 6. Log success
   const msg = `同步完成：更新 ${updatedCount} 个视频`
     + (archivedCount > 0 ? `，归档 ${archivedCount} 个已完成视频` : '')
 
@@ -198,6 +229,9 @@ export async function runSync() {
     totalFetched: history.length,
     updated: updatedCount,
     archived: archivedCount
+  }
+  } finally {
+    syncing = false
   }
 }
 

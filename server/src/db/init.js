@@ -3,7 +3,11 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = path.join(__dirname, '..', '..', 'data.db')
+const DB_PATH = process.env.TEST_DB || path.join(__dirname, '..', '..', 'data.db')
+
+if (process.env.TEST_DB && process.env.NODE_ENV !== 'test') {
+  console.warn('[init] TEST_DB is set but NODE_ENV is not "test" — using test database in non-test environment')
+}
 
 let db
 
@@ -64,6 +68,9 @@ function initSchema() {
   const cols = db.pragma('table_info(videos)').map(c => c.name)
   if (!cols.includes('manually_completed')) {
     db.exec('ALTER TABLE videos ADD COLUMN manually_completed INTEGER NOT NULL DEFAULT 0')
+  }
+  if (!cols.includes('progress_100_date')) {
+    db.exec('ALTER TABLE videos ADD COLUMN progress_100_date TEXT')
   }
 
   // Seed default settings if not present

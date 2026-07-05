@@ -27,6 +27,8 @@ export function insertVideo(video) {
 
 export function updateVideo(id, fields) {
   const db = getDb()
+  // Column names in `sets` are built from a hard-coded allowlist above —
+  // never from user input. The string interpolation below is safe.
   const allowed = ['custom_name', 'pinned', 'archived', 'progress_100_count']
   const sets = []
   const vals = {}
@@ -57,8 +59,13 @@ export function syncVideoFields(bvid, fields) {
   `).run({ ...fields, bvid })
 }
 
-export function updateProgress100Count(bvid, count) {
+export function updateProgress100Count(bvid, count, date) {
   const db = getDb()
+  if (date !== undefined) {
+    return db.prepare(`
+      UPDATE videos SET progress_100_count = ?, progress_100_date = ?, updated_at = datetime('now') WHERE bvid = ?
+    `).run(count, date, bvid)
+  }
   return db.prepare(`
     UPDATE videos SET progress_100_count = ?, updated_at = datetime('now') WHERE bvid = ?
   `).run(count, bvid)
@@ -85,6 +92,12 @@ export function getProgress100Map() {
   const db = getDb()
   const rows = db.prepare('SELECT bvid, progress_100_count FROM videos').all()
   return new Map(rows.map(r => [r.bvid, r.progress_100_count || 0]))
+}
+
+export function getProgress100DateMap() {
+  const db = getDb()
+  const rows = db.prepare('SELECT bvid, progress_100_date FROM videos').all()
+  return new Map(rows.map(r => [r.bvid, r.progress_100_date || null]))
 }
 
 export function markVideoCompleted(id) {

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "bash scripts/start.sh"
+    "start": "bash scripts/start.sh",
+    "test": "vitest run"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
@@ -15,5 +16,8 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "node-cron": "^4.2.1"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
   }
 }

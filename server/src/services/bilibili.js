@@ -80,11 +80,40 @@ export async function navInfo(sessdata) {
   return biliGet('/x/web-interface/nav', {}, sessdata)
 }
 
-export async function fetchAllHistory(sessdata) {
+// ── fetchAllHistory constants ──
+
+const MAX_HISTORY_PAGES = 50
+const HISTORY_PAGE_DELAY_MS = 250
+
+/**
+ * Fetch complete B站 watch history with pagination.
+ *
+ * @param {string} sessdata
+ * @param {object} [opts]
+ * @param {Set<string>} [opts.localBvids] — locally-tracked bvids; pagination stops
+ *   early once every bvid in this set has been seen in the fetched history.
+ * @param {number} [opts.maxPages] — hard page limit (default MAX_HISTORY_PAGES).
+ * @param {number} [opts.pageDelayMs] — inter-page delay in ms (default HISTORY_PAGE_DELAY_MS).
+ */
+export async function fetchAllHistory(sessdata, opts = {}) {
+  const { localBvids, maxPages = MAX_HISTORY_PAGES, pageDelayMs = HISTORY_PAGE_DELAY_MS } = opts
+
   const allVideos = []
   let cursor = { max: '', view_at: 0, business: 'archive' }
+  const seenLocalBvids = localBvids ? new Set() : null
+  let pageCount = 0
 
   while (true) {
+    pageCount++
+
+    // Hard page limit
+    if (pageCount > maxPages) break
+
+    // Inter-page delay (skip first page — no prior request to space from)
+    if (pageCount > 1 && pageDelayMs > 0) {
+      await new Promise(resolve => setTimeout(resolve, pageDelayMs))
+    }
+
     const params = {
       type: 'all',
       ps: 30,
@@ -107,8 +136,16 @@ export async function fetchAllHistory(sessdata) {
           duration: item.duration || 0,
           view_at: item.view_at || 0
         })
+
+        // Track which local bvids have been seen so far
+        if (seenLocalBvids && localBvids.has(item.history.bvid)) {
+          seenLocalBvids.add(item.history.bvid)
+        }
       }
     }
+
+    // Early termination: all local bvids found
+    if (seenLocalBvids && seenLocalBvids.size === localBvids.size) break
 
     if (!data.cursor || data.cursor.is_end) break
     cursor = {

@@ -10,6 +10,9 @@ router.use(requireAuth)
 router.post('/', async (_req, res) => {
   try {
     const result = await runSync()
+    if (result.locked) {
+      return res.status(409).json({ error: '同步进行中，请稍候' })
+    }
     res.json(result)
   } catch (err) {
     console.error('[sync]', err)
