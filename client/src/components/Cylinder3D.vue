@@ -9,21 +9,11 @@
       <div class="liquid-area">
         <div class="liquid-fill" :style="liquidStyle">
           <!-- Wave layers at liquid surface -->
-          <div class="wave" :style="{ animationDuration: '3.2s' }"></div>
-          <div class="wave wave-2" :style="{ animationDuration: '5s' }"></div>
+          <div class="wave" :style="{ animationDuration: '4s' }"></div>
+          <div class="wave wave-2" :style="{ animationDuration: '6s' }"></div>
           <!-- Meniscus — bright tension line at liquid surface -->
           <div class="meniscus"></div>
         </div>
-
-        <!-- Bubbles rising from within the liquid -->
-        <template v-if="progress > 0">
-          <div
-            v-for="b in bubbles"
-            :key="b.id"
-            class="bubble"
-            :style="b.style"
-          ></div>
-        </template>
       </div>
 
       <!-- Glass highlight / reflection -->
@@ -71,33 +61,6 @@ const liquidStyle = computed(() => ({
   height: `${Math.max(2, Math.min(100, props.progress))}%`,
   background: `linear-gradient(180deg, ${liquidColor.value.start} 0%, ${liquidColor.value.end} 100%)`
 }))
-
-// Bubble generation — 3 bubbles with deterministic pseudo-random offsets.
-// Deterministic: derive from progress to avoid re-roll every render.
-const bubbles = computed(() => {
-  const n = 3
-  const result = []
-  // Simple hash-like spread from progress value
-  const seed = props.progress * 7 + 13
-  for (let i = 0; i < n; i++) {
-    const h = ((seed * (i + 1) * 31 + i * 17) % 100) / 100
-    const left = 15 + ((seed * (i + 3) * 19 + i * 11) % 70)
-    const size = 3 + ((seed * (i + 5) * 23) % 5)  // 3-7px
-    const duration = 2.5 + ((seed * (i + 7) * 13) % 20) / 10 // 2.5-4.4s
-    const delay = ((seed * (i + 9) * 11) % 30) / 10 // 0-2.9s
-    result.push({
-      id: i,
-      style: {
-        left: `${left}%`,
-        width: `${size}px`,
-        height: `${size}px`,
-        animationDuration: `${duration}s`,
-        animationDelay: `${delay}s`,
-      },
-    })
-  }
-  return result
-})
 </script>
 
 <style scoped>
@@ -248,32 +211,30 @@ const bubbles = computed(() => {
   pointer-events: none;
 }
 
-/* ---- Wave layers — horizontal sway, transform-only ---- */
+/* ---- Wave animation (Plan C: original rotate) ---- */
 .wave {
   position: absolute;
-  top: -14px;
+  top: -16px;
   left: -50%;
   width: 200%;
-  height: 26px;
-  background: rgb(255 255 255 / 0.1);
-  border-radius: 40% 45% 36% 44% / 42% 38% 44% 40%;
-  animation: wave-sway var(--duration, 3.2s) ease-in-out infinite alternate;
+  height: 32px;
+  background: rgb(255 255 255 / 0.15);
+  border-radius: 42% 48% 44% 46%;
+  animation: wave-spin linear infinite;
+  opacity: 0.7;
 }
 
 .wave-2 {
-  top: -10px;
-  height: 20px;
-  opacity: 0.55;
-  border-radius: 44% 38% 42% 38% / 38% 44% 40% 42%;
+  top: -12px;
+  height: 24px;
+  animation-direction: reverse;
+  opacity: 0.4;
+  border-radius: 46% 42% 48% 44%;
 }
 
-@keyframes wave-sway {
-  0% {
-    transform: translateX(-10%);
-  }
-  100% {
-    transform: translateX(8%);
-  }
+@keyframes wave-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* ---- Glass highlight / reflection ---- */
@@ -292,42 +253,6 @@ const bubbles = computed(() => {
   border-radius: 40%;
   z-index: 3;
   pointer-events: none;
-}
-
-/* ---- Bubbles — rising from within liquid, subtle ---- */
-.bubble {
-  position: absolute;
-  bottom: 0;
-  border-radius: 50%;
-  opacity: 0;
-  background: radial-gradient(
-    circle at 35% 35%,
-    rgb(255 255 255 / 0.25) 0%,
-    rgb(255 255 255 / 0.06) 60%,
-    transparent 100%
-  );
-  box-shadow: inset 0 0 2px rgb(255 255 255 / 0.15);
-  animation: bubble-rise linear infinite;
-  pointer-events: none;
-  z-index: 1;
-}
-
-@keyframes bubble-rise {
-  0% {
-    transform: translateY(0) scale(0.7);
-    opacity: 0;
-  }
-  15% {
-    opacity: 0.6;
-    transform: translateY(-15%) scale(1);
-  }
-  85% {
-    opacity: 0.5;
-  }
-  100% {
-    transform: translateY(-95%) scale(0.85);
-    opacity: 0;
-  }
 }
 
 /* ---- Hover glow ring ---- */

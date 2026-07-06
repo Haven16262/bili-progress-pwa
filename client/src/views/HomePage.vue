@@ -68,9 +68,8 @@
       </div>
     </div>
 
-    <!-- Grid (tablet / desktop: fluid columns with max-width) -->
-    <div v-else class="home-grid-container">
-      <div class="grid gap-3" :style="gridStyle">
+    <!-- Grid (tablet / desktop: fluid columns, no max-width) -->
+    <div v-else class="grid gap-3" :style="gridStyle">
         <Cylinder3D
           v-for="video in videos"
           :key="video.id"
@@ -80,7 +79,6 @@
           @click="onEditVideo(video)"
         />
       </div>
-    </div>
 
     <!-- Add video modal -->
     <AddVideoModal
@@ -424,11 +422,6 @@ async function markCompleted() {
 }
 
 /* ---- Grid ---- */
-.home-grid-container {
-  max-width: 960px;
-  margin: 0 auto;
-}
-
 .home-grid-scroll {
   overflow-x: auto;
   overflow-y: visible;
