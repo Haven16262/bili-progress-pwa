@@ -3,7 +3,11 @@
     <PasswordGate v-if="!authenticated" @unlocked="onUnlocked" />
     <template v-else>
       <main class="flex-1 pb-16 overflow-auto">
-        <router-view />
+        <router-view v-slot="{ Component, route }">
+          <Transition name="page-fade" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </router-view>
       </main>
       <BottomNav />
     </template>
@@ -57,3 +61,16 @@ async function checkSyncStatus() {
   }
 }
 </script>
+
+<style>
+/* ---- Page transition: crossfade ---- */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
+}
+</style>

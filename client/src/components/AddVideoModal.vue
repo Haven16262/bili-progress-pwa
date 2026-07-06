@@ -1,63 +1,58 @@
 <template>
-  <div class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+  <div class="add-modal-overlay">
     <!-- Backdrop -->
-    <div class="absolute inset-0 bg-black/60" @click="$emit('close')"></div>
+    <div class="add-modal-backdrop" @click="$emit('close')"></div>
 
     <!-- Sheet -->
-    <div class="relative w-full sm:max-w-md bg-slate-800 rounded-t-2xl sm:rounded-2xl max-h-[80vh] flex flex-col shadow-2xl">
-      <!-- Handle -->
-      <div class="flex justify-center pt-3 pb-1 sm:hidden">
-        <div class="w-10 h-1 rounded-full bg-slate-600"></div>
+    <div class="add-modal-sheet">
+      <!-- Handle (mobile only) -->
+      <div class="add-modal-handle">
+        <div class="add-modal-handle__bar"></div>
       </div>
 
       <!-- Header -->
-      <div class="px-5 py-3 border-b border-slate-700 flex justify-between items-center">
-        <h3 class="font-semibold">从 B 站最近播放添加</h3>
-        <button @click="$emit('close')" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      <div class="add-modal-header">
+        <h3 class="add-modal-header__title">从 B 站最近播放添加</h3>
+        <button @click="$emit('close')" class="add-modal-header__close" aria-label="关闭">&times;</button>
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="p-8 text-center text-slate-400 text-sm">加载中...</div>
+      <div v-if="loading" class="add-modal-status">加载中...</div>
 
       <!-- Error -->
-      <div v-else-if="error" class="p-8 text-center">
-        <p class="text-red-400 text-sm mb-3">{{ error }}</p>
-        <button @click="fetchCandidates" class="px-4 py-2 bg-slate-700 rounded-lg text-sm">重试</button>
+      <div v-else-if="error" class="add-modal-error">
+        <p>{{ error }}</p>
+        <button @click="fetchCandidates" class="add-modal-error__retry">重试</button>
       </div>
 
       <!-- Empty -->
-      <div v-else-if="candidates.length === 0" class="p-8 text-center text-slate-500 text-sm">
+      <div v-else-if="candidates.length === 0" class="add-modal-empty">
         <p>没有可添加的视频</p>
-        <p class="text-xs mt-1">最近播放的视频都已经在主页上了</p>
+        <p class="add-modal-empty__hint">最近播放的视频都已在主页上</p>
       </div>
 
       <!-- List -->
-      <div v-else class="overflow-y-auto flex-1">
-        <div
+      <div v-else class="add-modal-list">
+        <button
           v-for="item in candidates"
           :key="item.bvid"
-          class="flex items-center gap-3 px-5 py-3 border-b border-slate-700/50 hover:bg-slate-750 transition cursor-pointer"
+          class="add-modal-item"
           @click="addOne(item)"
         >
-          <!-- Cover -->
           <img
             :src="item.cover"
             :alt="item.title"
-            class="w-12 h-8 rounded object-cover bg-slate-700 flex-shrink-0"
+            class="add-modal-item__cover"
             loading="lazy"
           />
-
-          <!-- Info -->
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-slate-200 truncate">{{ item.title }}</p>
-            <p class="text-xs text-slate-500 mt-0.5">
+          <div class="add-modal-item__info">
+            <p class="add-modal-item__title">{{ item.title }}</p>
+            <p class="add-modal-item__meta">
               {{ item.author_name }} · 进度 {{ Math.round(item.progress) }}%
             </p>
           </div>
-
-          <!-- Add icon -->
-          <span class="text-cyan-400 text-lg flex-shrink-0">+</span>
-        </div>
+          <span class="add-modal-item__add">+</span>
+        </button>
       </div>
     </div>
   </div>
@@ -106,3 +101,201 @@ async function addOne(item) {
   } catch { /* ignore */ }
 }
 </script>
+
+<style scoped>
+/* ---- Overlay ---- */
+.add-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 51;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.add-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.6);
+}
+
+/* ---- Sheet ---- */
+.add-modal-sheet {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-2xl);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.5);
+  animation: scale-in var(--duration-normal) var(--ease-out) forwards;
+  overflow: hidden;
+}
+
+/* ---- Handle (mobile drag indicator) ---- */
+.add-modal-handle {
+  display: none;
+  justify-content: center;
+  padding-top: 0.75rem;
+  padding-bottom: 0.25rem;
+}
+
+.add-modal-handle__bar {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+}
+
+@media (max-width: 640px) {
+  .add-modal-handle {
+    display: flex;
+  }
+}
+
+/* ---- Header ---- */
+.add-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.add-modal-header__title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.add-modal-header__close {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.add-modal-header__close:hover {
+  color: var(--color-text-primary);
+}
+
+/* ---- Status states ---- */
+.add-modal-status {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.add-modal-error {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-danger);
+  font-size: var(--text-sm);
+}
+
+.add-modal-error__retry {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--color-surface-secondary);
+  border: none;
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.add-modal-error__retry:hover {
+  background: var(--color-surface-hover);
+}
+
+.add-modal-empty {
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+}
+
+.add-modal-empty__hint {
+  margin-top: 0.25rem;
+  font-size: var(--text-xs);
+}
+
+/* ---- List ---- */
+.add-modal-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.add-modal-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.add-modal-item:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+
+.add-modal-item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+
+.add-modal-item:last-child {
+  border-bottom: none;
+}
+
+.add-modal-item__cover {
+  width: 3rem;
+  height: 2rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-surface-secondary);
+  flex-shrink: 0;
+}
+
+.add-modal-item__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-modal-item__title {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-modal-item__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.add-modal-item__add {
+  color: var(--color-accent);
+  font-size: 1.125rem;
+  flex-shrink: 0;
+}
+</style>
