@@ -510,3 +510,80 @@ Token 收敛(30+ CSS 变量) / 导航 SVG 三态 / 主页统计页头+960px 居�
 |------|------|
 | `client/src/assets/styles/main.css` | +8 行液体色 token（`--liquid-*-start/end`） |
 | `client/src/components/Cylinder3D.vue` | 模板新增 bubbles + meniscus；script 新增 `bubbles` computed；样式重写波浪 keyframes + bubble 动画 + rim gradient + meniscus |
+
+## [2026-07-07 02:00] 工作者 — 补充任务 6 最终落地（方案 C）+ 气泡删除 + 桌面间距修复
+
+**用户决策链：**
+1. 方案 A（散点光斑）→ 透明度问题修复后面世，但观感「怪怪的」，否决
+2. 方案 B（对角亮线）→ 用户未选中
+3. **方案 C（wave-spin 回归）→ 用户选中**：直接回退波浪动画到原始 `rotate`（周期 4s/6s），靠旋转 blob 自带的光影效果恢复杯壁动感
+4. 气泡删除：用户反馈气泡过小、观感冗余 → 模板/script/CSS 全量移除
+5. 桌面端杯子间距过近：根因是 Round 1 加入的 `max-width: 960px` 在宽屏上挤压杯子 → 移除约束，回归旧方案网格自然填满视口
+
+**最终 Cylinder3D.vue 结构：**
+- 模板：`top-rim-back` → `liquid-area`（`liquid-fill` 含双层 wave(rotate) + meniscus）→ `glass-shine` → `progress-text` → `top-rim` → `hover-glow`
+- Script：`liquidColor` 引用 CSS token、`liquidStyle`（height + background）
+- 样式：wave-spin(rotate) + meniscus + rim 高光(offset-left radial) + glass-shine + hover-glow
+
+**最终文件变更：**
+| 文件 | 变更 |
+|------|------|
+| `main.css` | +11 行液体色 token（未变，同 Round 2） |
+| `Cylinder3D.vue` | 模板去 bubbles/light-sweep；script 去 bubbles computed；样式 wave 回 rotate，去 bubble/light-sweep CSS |
+| `HomePage.vue` | 去 `max-width: 960px` 约束 + 关联 CSS 规则（用户反馈桌面间距过近） |
+| `context.md` | 交接写入手 |
+
+**构建体积（最终）：**
+CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB 还小 0.32 KB）
+
+**关键决策点：**
+
+1. **架构方向分歧** — 任务 6 最初要求「新增独立玻璃光影层」（不允许回退 wave），经 A/B/C 三方案对比后用户选择方案 C（wave-spin 回归）。这不是工作者擅自改方向，是用户实物对比后的明确选择。原 translateX 波浪的「液体晃动」语义虽更准确，但 rotate blob 的「杯壁光影循环」视觉反馈更好——用户优先选了观感。
+
+2. **安全相关** — 无。
+
+3. **接口/约定偏离** — 任务 6 原要求「不得通过改回 wave rotate 实现」→ 用户选择推翻此约束。HomePage.vue 的 max-width 移除属本轮范围外的小修复（用户明确要求）。其余红线全部遵守。
+
+4. **已知问题** — 无阻断项。wave-spin 的 rotate blob 严格来说仍是「旋转的不规则形状」而非物理波浪，但视觉效果已满足用户。如需未来进一步优化，方向应是「保留 rotate 动感 + 让 blob 形状更接近真实液面波动」。
+
+## [2026-07-07 02:20] 全局者 — 任务 6 终版审查通过，第二轮全部关闭
+
+**审查：** 预检零命中（无需 critic）；diff 核对——Cylinder3D 无 bubble/light-sweep 死代码残留、wave-spin 回归就位；HomePage diff 仅 max-width 包裹层移除，零逻辑改动；构建通过，体积 51.43KB gz（比第二轮基线更小）。代码 commit `1af2bdc`。被否决方案 B 的遗留截图 cup-light-sweep.png 已删。
+
+**对偏离的裁定：** 任务 6「不得改回 wave rotate」约束被用户 A/B/C 实物对比推翻——用户拥有最终决定权，工作者如实申报，合规。HomePage.vue 超出两文件红线，属用户当场明确指令，合规。
+
+**固化：** 用户三项实物决策（rotate 光影定版 / 气泡否决 / 网格不加 max-width）已写入「跨 Phase 关键约定」，防后续轮次以「更物理正确」为由回改。
+
+**决策：** 第二轮（杯子活化）正式关闭。Phase「UI 视觉美化」整体待用户表态：满意即由全局者做 Phase 关闭归档。
+
+## [2026-07-07 03:00] 修复 — M2 封面图加载失败（Chrome ORB）
+
+**问题：** 添加视频弹窗中 B站封面图全部显示为裂图占位符，`naturalWidth=0`，text/emoji 显示断裂。
+
+**排查过程：**
+1. 初疑 CSP → `imgSrc` 加 `*.hdslb.com`，去 scheme 前缀 → 无效
+2. Playwright 监听网络层 → 捕获 `ERR_BLOCKED_BY_ORB`（Opaque Response Blocking）
+3. 确认 B站 CDN 支持 CORS（`Access-Control-Allow-Origin: *`）且 CORP 为 `cross-origin`（宽许）
+4. 结论：Chrome 149 的 ORB 机制误将跨域 `<img>` no-cors 请求当作 opaque response 拦截
+
+**修复：**
+- `AddVideoModal.vue`：`<img>` 加 `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`
+- `server/src/index.js`：CSP `imgSrc` 加 `*.hdslb.com`，`*.bilibili.com` 去 `https://` 前缀（双保险，非根因）
+- 去掉 `loading="lazy"`（弹窗内 lazy 无意义且延迟首屏可见性）
+
+**变更文件：** `AddVideoModal.vue`（+2 attr）、`server/src/index.js`（imgSrc 一行）
+
+## [2026-07-07 03:40] 全局者 — Phase「UI 视觉美化」关闭总结
+
+**交付汇总（三轮 + 一修复）：**
+1. 第一轮·全站 polish：30+ 设计 token / 导航 SVG 三态 / 主页统计页头 + 空态 / 设置页收敛排版 / 微动效 + reduced-motion / L2 弹窗层级修复 / Cylinder3D 按钮化(a11y)
+2. 第二轮·杯子活化：分级色 token 化 / meniscus 亮线 / rim 单侧高光,液面波动与气泡经用户 A/B/C 实物对比后定版为 wave rotate 光影 + 无气泡,桌面网格去 max-width
+3. M2 修复：封面图裂图根因为 Chrome ORB(非 CSP),`crossorigin="anonymous"` + `referrerpolicy="no-referrer"` 修复,CSP imgSrc 顺带补 *.hdslb.com
+
+**commit 链：** `e44a6e7`(开启) → `6ee438d`(第一轮) → `9f975d3`/`92b8969`(二轮决策) → `e658951`(活化) → `1af2bdc`(方案C定版) → `81e5b08`(固化) → `7d2711c`(M2 ORB 修复)
+
+**critic 总览：** 三次结构化审查(第一轮 9 文件 / 活化轮 / ORB 修复)全部 PASS,零 CRITICAL/HIGH。一次申报遗漏记录(playwright devDependency 未报附带变动)。
+
+**方法论沉淀：** 动效方案拿不准时做 2-3 个实物变体让用户挑(A/B/C 对比),远好于文字讨论;用户观感优先于实现的物理正确性。已存项目记忆 user-ui-taste.md。
+
+**遗留移交：** 6b 生产回归验证仍待用户操作,**注意 M2 的 CSP 改动在服务端,需 PM2 重启才生效,可与 6b 一并做**。Backlog 剩 H3/M3/L1/L3/M4/L4/L5/L6(功能轮候选)。
