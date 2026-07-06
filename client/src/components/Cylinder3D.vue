@@ -8,11 +8,22 @@
       <!-- Liquid fill area -->
       <div class="liquid-area">
         <div class="liquid-fill" :style="liquidStyle">
-          <!-- Wave 1 -->
-          <div class="wave" :style="{ animationDuration: '4s' }"></div>
-          <!-- Wave 2 -->
-          <div class="wave wave-2" :style="{ animationDuration: '6s' }"></div>
+          <!-- Wave layers at liquid surface -->
+          <div class="wave" :style="{ animationDuration: '3.2s' }"></div>
+          <div class="wave wave-2" :style="{ animationDuration: '5s' }"></div>
+          <!-- Meniscus — bright tension line at liquid surface -->
+          <div class="meniscus"></div>
         </div>
+
+        <!-- Bubbles rising from within the liquid -->
+        <template v-if="progress > 0">
+          <div
+            v-for="b in bubbles"
+            :key="b.id"
+            class="bubble"
+            :style="b.style"
+          ></div>
+        </template>
       </div>
 
       <!-- Glass highlight / reflection -->
@@ -47,22 +58,50 @@ const props = defineProps({
 const displayName = computed(() => props.customName || props.fullTitle || '未命名')
 
 // Color shifts from cyan (low) → blue → violet → purple (high)
+// Token names defined in main.css: --liquid-{cyan,blue,violet,purple}-{start,end}
 const liquidColor = computed(() => {
   const p = Math.max(0, Math.min(100, props.progress))
-  if (p < 30) return { start: '#06b6d4', end: '#0891b2' }       // cyan
-  if (p < 60) return { start: '#3b82f6', end: '#2563eb' }       // blue
-  if (p < 90) return { start: '#8b5cf6', end: '#7c3aed' }       // violet
-  return { start: '#a855f7', end: '#9333ea' }                    // purple (finishing)
+  if (p < 30) return { start: 'var(--liquid-cyan-start)', end: 'var(--liquid-cyan-end)' }
+  if (p < 60) return { start: 'var(--liquid-blue-start)', end: 'var(--liquid-blue-end)' }
+  if (p < 90) return { start: 'var(--liquid-violet-start)', end: 'var(--liquid-violet-end)' }
+  return { start: 'var(--liquid-purple-start)', end: 'var(--liquid-purple-end)' }
 })
 
 const liquidStyle = computed(() => ({
   height: `${Math.max(2, Math.min(100, props.progress))}%`,
   background: `linear-gradient(180deg, ${liquidColor.value.start} 0%, ${liquidColor.value.end} 100%)`
 }))
+
+// Bubble generation — 3 bubbles with deterministic pseudo-random offsets.
+// Deterministic: derive from progress to avoid re-roll every render.
+const bubbles = computed(() => {
+  const n = 3
+  const result = []
+  // Simple hash-like spread from progress value
+  const seed = props.progress * 7 + 13
+  for (let i = 0; i < n; i++) {
+    const h = ((seed * (i + 1) * 31 + i * 17) % 100) / 100
+    const left = 15 + ((seed * (i + 3) * 19 + i * 11) % 70)
+    const size = 3 + ((seed * (i + 5) * 23) % 5)  // 3-7px
+    const duration = 2.5 + ((seed * (i + 7) * 13) % 20) / 10 // 2.5-4.4s
+    const delay = ((seed * (i + 9) * 11) % 30) / 10 // 0-2.9s
+    result.push({
+      id: i,
+      style: {
+        left: `${left}%`,
+        width: `${size}px`,
+        height: `${size}px`,
+        animationDuration: `${duration}s`,
+        animationDelay: `${delay}s`,
+      },
+    })
+  }
+  return result
+})
 </script>
 
 <style scoped>
-/* ---- Wrapper — now a <button> for native focus & a11y ---- */
+/* ---- Wrapper — <button> for native focus & a11y ---- */
 .cylinder-wrapper {
   display: flex;
   flex-direction: column;
@@ -127,7 +166,7 @@ const liquidStyle = computed(() => ({
   box-shadow:
     inset 0 0 20px rgb(0 0 0 / 0.5),
     0 4px 16px rgb(0 0 0 / 0.4),
-    0 0 24px rgb(6 182 212 / 0.08);
+    0 0 24px rgb(6 182 212 / 0.1);
   border-color: rgb(148 163 184 / 0.55);
 }
 
@@ -139,14 +178,16 @@ const liquidStyle = computed(() => ({
   right: -2px;
   height: 16%;
   max-height: 22px;
-  border: 2px solid rgb(148 163 184 / 0.4);
-  border-bottom: 1px solid rgb(148 163 184 / 0.2);
+  border: 2px solid rgb(148 163 184 / 0.45);
+  border-bottom: 1px solid rgb(148 163 184 / 0.25);
   border-radius: 50%;
+  /* Rim highlight: subtle bright spot offset-left, mimicking light source */
   background: radial-gradient(
-    ellipse at 50% 60%,
-    rgb(30 41 59 / 0.8) 0%,
-    rgb(51 65 85 / 0.4) 60%,
-    rgb(71 85 105 / 0.3) 100%
+    ellipse at 35% 55%,
+    rgb(255 255 255 / 0.18) 0%,
+    rgb(71 85 105 / 0.6) 30%,
+    rgb(30 41 59 / 0.8) 60%,
+    rgb(51 65 85 / 0.4) 100%
   );
   z-index: 4;
 }
@@ -188,33 +229,54 @@ const liquidStyle = computed(() => ({
   box-shadow: inset 0 8px 16px rgb(255 255 255 / 0.1);
 }
 
-/* ---- Wave animation ---- */
+/* ---- Meniscus — bright tension line at liquid surface ---- */
+.meniscus {
+  position: absolute;
+  top: 0;
+  left: 4%;
+  right: 4%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.25) 15%,
+    rgb(255 255 255 / 0.08) 50%,
+    rgb(255 255 255 / 0.25) 85%,
+    transparent 100%
+  );
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* ---- Wave layers — horizontal sway, transform-only ---- */
 .wave {
   position: absolute;
-  top: -16px;
+  top: -14px;
   left: -50%;
   width: 200%;
-  height: 32px;
-  background: rgb(255 255 255 / 0.15);
-  border-radius: 42% 48% 44% 46%;
-  animation: wave-spin linear infinite;
-  opacity: 0.7;
+  height: 26px;
+  background: rgb(255 255 255 / 0.1);
+  border-radius: 40% 45% 36% 44% / 42% 38% 44% 40%;
+  animation: wave-sway var(--duration, 3.2s) ease-in-out infinite alternate;
 }
 
 .wave-2 {
-  top: -12px;
-  height: 24px;
-  animation-direction: reverse;
-  opacity: 0.4;
-  border-radius: 46% 42% 48% 44%;
+  top: -10px;
+  height: 20px;
+  opacity: 0.55;
+  border-radius: 44% 38% 42% 38% / 38% 44% 40% 42%;
 }
 
-@keyframes wave-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+@keyframes wave-sway {
+  0% {
+    transform: translateX(-10%);
+  }
+  100% {
+    transform: translateX(8%);
+  }
 }
 
-/* ---- Glass highlight ---- */
+/* ---- Glass highlight / reflection ---- */
 .glass-shine {
   position: absolute;
   top: 12%;
@@ -232,7 +294,43 @@ const liquidStyle = computed(() => ({
   pointer-events: none;
 }
 
-/* ---- Hover glow ring (hidden by default, shown on hover) ---- */
+/* ---- Bubbles — rising from within liquid, subtle ---- */
+.bubble {
+  position: absolute;
+  bottom: 0;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(
+    circle at 35% 35%,
+    rgb(255 255 255 / 0.25) 0%,
+    rgb(255 255 255 / 0.06) 60%,
+    transparent 100%
+  );
+  box-shadow: inset 0 0 2px rgb(255 255 255 / 0.15);
+  animation: bubble-rise linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes bubble-rise {
+  0% {
+    transform: translateY(0) scale(0.7);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.6;
+    transform: translateY(-15%) scale(1);
+  }
+  85% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(-95%) scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* ---- Hover glow ring ---- */
 .hover-glow {
   position: absolute;
   inset: -4px;
