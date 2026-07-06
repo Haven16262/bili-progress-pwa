@@ -466,3 +466,7 @@ Token 收敛(30+ CSS 变量) / 导航 SVG 三态 / 主页统计页头+960px 居�
 ## [2026-07-06 23:55] 全局者 — UI 美化第一轮审查通过，放行并 commit
 
 安全预检命中 10 处 → critic 审查 9/9 PASS,0 CRITICAL/HIGH;红线不变量(h-screen/localStorage/API/z-index)全部守住;截图+构建验收通过;用户三端确认。申报遗漏记录:根目录 playwright devDependency 未报「附带变动」,内容干净,决策保留入库并提醒工作者。代码 commit `6ee438d`,归档 commit `5c88a9d`。Phase 保持开启,等待 UI 升级方向。
+
+## [2026-07-07 00:20] 全局者 — 第二轮「杯子活化」开启（组合选择）
+
+用户浏览参考后授权全局者组合选择。组合 = 液面波动 + 杯内气泡 + 玻璃质感微升级 + 分级色 token 化;不采用整体 Liquid Glass/卡通/filter 特效;范围锁死 Cylinder3D.vue + main.css 两文件;验收标准 subtle + 体积增幅 < 5KB gz。参考收藏存项目记忆 ref-ui-inspiration.md。
