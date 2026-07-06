@@ -43,7 +43,8 @@
             :src="item.cover"
             :alt="item.title"
             class="add-modal-item__cover"
-            loading="lazy"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"
           />
           <div class="add-modal-item__info">
             <p class="add-modal-item__title">{{ item.title }}</p>

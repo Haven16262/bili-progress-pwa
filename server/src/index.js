@@ -26,7 +26,9 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", "https://*.bilibili.com", "data:"],
+      // 无 scheme 前缀的 host-source 允许任意 scheme,但 HTTPS 页面加载 HTTP 图片
+      // 仍会被浏览器混合内容策略(MCA)拦截,实际只放行 HTTPS——不是安全放宽
+      imgSrc: ["'self'", "*.bilibili.com", "*.hdslb.com", "data:"],
       connectSrc: ["'self'"],
       fontSrc: ["'self'"],
       formAction: ["'self'"],
