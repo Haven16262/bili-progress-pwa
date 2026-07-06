@@ -470,3 +470,43 @@ Token 收敛(30+ CSS 变量) / 导航 SVG 三态 / 主页统计页头+960px 居�
 ## [2026-07-07 00:20] 全局者 — 第二轮「杯子活化」开启（组合选择）
 
 用户浏览参考后授权全局者组合选择。组合 = 液面波动 + 杯内气泡 + 玻璃质感微升级 + 分级色 token 化;不采用整体 Liquid Glass/卡通/filter 特效;范围锁死 Cylinder3D.vue + main.css 两文件;验收标准 subtle + 体积增幅 < 5KB gz。参考收藏存项目记忆 ref-ui-inspiration.md。
+
+## [2026-07-07 01:10] 全局者 — 第二轮审查通过 + 补充任务 6「杯壁光影回归」
+
+审查：预检命中 1 处（CSS 变量文档注释）→ critic 全项 PASS；体积 +0.48KB 与自报一致；代码 commit `e658951`。用户反馈波浪改 translateX 后杯壁循环光影消失 → 决策「分层补齐而非回退」：新增独立玻璃光影层（周期 8-10s、低透明度），禁止改回 wave rotate。（注：此约束后被用户 A/B/C 实物对比推翻，选定方案 C = wave rotate 回归，见后续条目）
+
+## [2026-07-07 00:50] 工作者 — 第二轮「杯子活化」全部完成，交接全局者审查
+
+**完成摘要：**
+1. 分级色 token 化：`main.css` 新增 8 个 `--liquid-{cyan,blue,violet,purple}-{start,end}` 变量；`Cylinder3D.vue` 的 `liquidColor` 改用 `var(--liquid-*-start/end)` 引用，四级阈值(30/60/90)不变
+2. 液面波动：波浪动画从 `rotate(0→360deg)` 改为 `translateX(-10%↔8%)` 往复晃动（`@keyframes wave-sway` + `ease-in-out infinite alternate`），两层错速（3.2s / 5s）、透明度错开（1.0 / 0.55）。`prefers-reduced-motion` 下全局规则冻结 animation-duration=0.01ms → 波浪静止
+3. 杯内气泡：3 颗气泡（3-7px），deterministic pseudo-random 布局（seed 取自 `progress` 值，同进度杯子气泡位置一致避免闪烁）。动画 `@keyframes bubble-rise`：`translateY(0→-95%)` + `opacity(0→0.6→0)`，时长 2.5-4.4s 随机错峰。`progress=0` 时 `v-if` 不渲染；reduced-motion 下因基类 `opacity: 0` + animation-duration=0.01ms 等效不可见
+4. 玻璃质感微升级：
+   - **Rim 高光**：`.top-rim` 渐变从均匀 radial 改为 offset-left 高亮（`ellipse at 35% 55%`，白色 18% opacity 起点），模拟单侧光源
+   - **Meniscus 亮线**：液面顶部 2px 渐变细线（边缘亮→中间暗→边缘亮），模拟液体表面张力与玻璃接触处的弯月面高光
+   - 零 filter/backdrop-filter
+5. 自查：
+   - 构建体积：CSS gzip 6.08→6.38 KB (+0.30)，JS gzip 45.20→45.38 KB (+0.18)，**合计 +0.48 KB（< 5KB ✅）**
+   - 截图：`docs/screenshots/cup-normal.png`（常态）、`cup-hover.png`（hover 抬起+glow）、`home-mobile-cups.png`（375px 移动端全页）
+   - reduced-motion：全局 `@media` 规则覆盖所有动画，波浪静止、气泡不可见 ✅
+
+**关键决策点：**
+
+1. **架构方向分歧** — 波浪实现从第一轮的 `rotate`（旋转 blob）改为 `translateX` 往复晃动。rotate 方案视觉上像旋转的黏性 blob 而非波浪表面；translateX 方案更贴近液体水平晃动的物理直觉。两者都是 transform-only，性能无差异。此决策在全局者授权范围内（"SVG path 或 CSS 实现均可"）。
+
+2. **安全相关** — 无。纯 CSS 动画 + 组件模板内 conditional rendering，无任何数据/逻辑变更。
+
+3. **接口/约定偏离** — 无。严格只改两个文件（`Cylinder3D.vue` + `main.css`），零扩散。分级色四级阈值 30/60/90 不变，`liquidStyle` 的 height/background 计算逻辑不变，props/emit 接口不变。`main.css` token 段为纯新增 8 行，不影响已有 token。
+
+4. **已知问题** — Bubble 随机化是 deterministic pseudo-random（seed 基于 `progress` 值），同一进度的所有杯子气泡布局完全一致。这是有意设计（防每帧重新计算导致布局抖动），但视觉变化有限。若后续想要更多随机性，可改用 `video.id` 作为 seed 来源（不改接口，仅 `bubbles` computed 内部调整）。
+
+**截图位置：**
+- `docs/screenshots/cup-normal.png` — 杯子常态特写
+- `docs/screenshots/cup-hover.png` — 杯子 hover 抬起 + glow 环
+- `docs/screenshots/home-mobile-cups.png` — 375px 手机宽度下 8 个杯子的网格布局
+
+**Diff 范围（本轮严格两文件）：**
+| 文件 | 变更 |
+|------|------|
+| `client/src/assets/styles/main.css` | +8 行液体色 token（`--liquid-*-start/end`） |
+| `client/src/components/Cylinder3D.vue` | 模板新增 bubbles + meniscus；script 新增 `bubbles` computed；样式重写波浪 keyframes + bubble 动画 + rim gradient + meniscus |

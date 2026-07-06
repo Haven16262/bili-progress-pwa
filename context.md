@@ -9,9 +9,9 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** Phase — UI 视觉美化（第二轮：杯子活化 + 补充任务）
-**当前任务:** 第二轮 5 项任务已审查通过并 commit（`e658951`）。剩一个补充任务 6：杯壁光影回归——用户反馈第二轮波浪从 rotate 改 translateX 后，原「杯壁循环旋转光影」消失，需以独立层恢复动感
-**关键依据文档:** 参考收藏见项目记忆 `ref-ui-inspiration.md`；杯子特写截图 `docs/screenshots/cup-{normal,hover}.png`
+**阶段:** Phase — UI 视觉美化（第二轮：杯子活化 — 已完成并放行）
+**当前任务:** 全部完成。任务 6 终版（方案 C：wave-spin 回归 + 删气泡 + 桌面网格去 max-width）已审查放行并 commit（`1af2bdc`，预检零命中）。工作者当前无待办任务；Phase 待用户表态后由全局者关闭归档
+**关键依据文档:** 参考收藏见项目记忆 `ref-ui-inspiration.md`；杯子特写截图 `docs/screenshots/cup-{normal,hover}.png`（light-sweep 为被否决方案 B 遗留，已删）
 
 **设计方向（全局者定调，2026-07-06 用户授权全局者组合选择）：**
 - **只借细节，不换语言**：从 Liquid Glass 潮流只借「杯子本体」的玻璃质感；从喝水类 App 借「液面波动 + 杯内气泡」微细节；卡通/吉祥物风格、整体玻璃化一概不采用
@@ -21,11 +21,11 @@
 **任务清单(给工作者):**
 
 - [x] 1. 分级色收进 token：`Cylinder3D.vue` 里 `liquidColor` 四级八个硬编码 hex 挪到 `main.css` token（完成标准：组件内无硬编码色值；四级分级逻辑与视觉不变）
-- [x] 2. 液面波动：液面顶部双层波浪（前后两层、速度/透明度错开），SVG path 或 CSS 实现均可，但循环动画必须 transform-only（完成标准：DevTools Performance 无持续 layout/paint;`prefers-reduced-motion` 下波浪静止为平面）
-- [x] 3. 杯内气泡：2-4 颗小气泡自液底缓升，opacity/transform 动画，随机错峰（完成标准：进度为 0 时不渲染气泡；reduced-motion 下不渲染；肉眼观感 subtle 不抢戏）
+- [x] 2. 液面波动：~~translateX 双层波浪~~ → **用户选方案 C：回退到原始 wave-spin (rotate)**，周期 4s/6s，比 translateX 更有「杯壁光影循环」的动感。meniscus 亮线保留
+- [x] 3. ~~杯内气泡~~ → **用户决定删除**：气泡过小、观感冗余，已从模板/script/CSS 完全移除
 - [x] 4. 玻璃质感微升级：杯口 rim 高光 + 液面顶部 meniscus 亮线，纯 CSS 渐变实现（完成标准：不使用任何 filter/backdrop-filter；静态截图对比第一轮有可感知但不突兀的质感提升）
 - [x] 5. 自查交付：reduced-motion 开关两种状态验证 + 构建体积对比（完成标准：JS+CSS gzip 增幅 < 5KB）+ 杯子特写截图（一张常态、一张 hover）存 `docs/screenshots/`
-- [ ] 6. 【补充】杯壁光影回归：新增独立「玻璃光影」层（不动现有 wave/bubble/meniscus），恢复光影沿杯壁循环扫过的观感；比旧版更克制——周期 8-10s（旧版 4s 偏快）、透明度压低、transform-only、reduced-motion 下静止（完成标准：肉眼可见光影循环动感；不得通过改回 wave rotate 实现；仍只改 `Cylinder3D.vue`（如需 token 可加 `main.css`）；体积增幅忽略不计）
+- [x] 6. 【补充】杯壁光影回归：~~独立玻璃光影层~~ → 经 A/B/C 三方案对比后**用户选方案 C：直接回退 wave 动画到原始 rotate**。方案 A（散点光斑旋转）观感怪、方案 B（对角亮线旋转）未选中。最终方案：wave-spin (rotate) 回归 + 气泡删除 + meniscus/rim 高光保留
 
 **Scope 边界（本轮红线）：**
 - **只允许改两个文件**：`Cylinder3D.vue` + `main.css`（token 段）。其他任何组件/页面/配置一律不碰
@@ -60,6 +60,7 @@
 - **归档 = 永久软隐藏，非删除**：`archived=1` 只从首页列表隐藏，记录永久保留在数据库，没有自动删除机制，也不新增（用户已确认维持现状）
 - **归档倒计时按日历日计**：「进度 100% 持续 3 天归档」中的一天 = 一个日历日，同日多次同步不重复计数（2026-07-04 架构评审 H1 决策，本 Phase 实现）
 - **B站 请求节制**：历史翻页必须有提前终止 + 页数上限 + 页间延时，防触发风控（2026-07-04 架构评审 H2 决策）
+- **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **原生模块 ABI 迁移雷区（教训）**：`server/node_modules` 是 2026-05-22 在旧 DO 服务器（旧 Node 版本）装的，随项目一起搬到 Hetzner（06-24），但没人针对新机器的 Node 22 重新编译过。进程只有在重启那一刻才会因 `better-sqlite3` 原生插件 ABI 不匹配而崩溃（`ERR_DLOPEN_FAILED`），所以中间十天服务没重启，一直正常，直到 07-04 一次普通重启才暴露、连崩 7 次后 PM2 daemon 一并挂掉，导致 502。现已加 `server/scripts/start.sh` 自愈：启动前探测 ABI 不匹配则自动 `npm rebuild better-sqlite3` 再起服务；PM2 已切换为跑该脚本（`pm2 start scripts/start.sh --interpreter bash` + `pm2 save`），`npm start` 同步指向该脚本。以后任何原生模块迁移/Node 升级场景都有兜底。
 
@@ -71,49 +72,48 @@
 
 > 第一轮（全站 polish）交付/审查记录、第二轮开启决策(00:20)均已归档至 `context_history.md`「Phase：UI 视觉美化」段。
 
-## [2026-07-07 00:50] 工作者 — 第二轮「杯子活化」全部完成，交接全局者审查
 
-**完成摘要：**
-1. 分级色 token 化：`main.css` 新增 8 个 `--liquid-{cyan,blue,violet,purple}-{start,end}` 变量；`Cylinder3D.vue` 的 `liquidColor` 改用 `var(--liquid-*-start/end)` 引用，四级阈值(30/60/90)不变
-2. 液面波动：波浪动画从 `rotate(0→360deg)` 改为 `translateX(-10%↔8%)` 往复晃动（`@keyframes wave-sway` + `ease-in-out infinite alternate`），两层错速（3.2s / 5s）、透明度错开（1.0 / 0.55）。`prefers-reduced-motion` 下全局规则冻结 animation-duration=0.01ms → 波浪静止
-3. 杯内气泡：3 颗气泡（3-7px），deterministic pseudo-random 布局（seed 取自 `progress` 值，同进度杯子气泡位置一致避免闪烁）。动画 `@keyframes bubble-rise`：`translateY(0→-95%)` + `opacity(0→0.6→0)`，时长 2.5-4.4s 随机错峰。`progress=0` 时 `v-if` 不渲染；reduced-motion 下因基类 `opacity: 0` + animation-duration=0.01ms 等效不可见
-4. 玻璃质感微升级：
-   - **Rim 高光**：`.top-rim` 渐变从均匀 radial 改为 offset-left 高亮（`ellipse at 35% 55%`，白色 18% opacity 起点），模拟单侧光源
-   - **Meniscus 亮线**：液面顶部 2px 渐变细线（边缘亮→中间暗→边缘亮），模拟液体表面张力与玻璃接触处的弯月面高光
-   - 零 filter/backdrop-filter
-5. 自查：
-   - 构建体积：CSS gzip 6.08→6.38 KB (+0.30)，JS gzip 45.20→45.38 KB (+0.18)，**合计 +0.48 KB（< 5KB ✅）**
-   - 截图：`docs/screenshots/cup-normal.png`（常态）、`cup-hover.png`（hover 抬起+glow）、`home-mobile-cups.png`（375px 移动端全页）
-   - reduced-motion：全局 `@media` 规则覆盖所有动画，波浪静止、气泡不可见 ✅
+## [2026-07-07 02:00] 工作者 — 补充任务 6 最终落地（方案 C）+ 气泡删除 + 桌面间距修复
+
+**用户决策链：**
+1. 方案 A（散点光斑）→ 透明度问题修复后面世，但观感「怪怪的」，否决
+2. 方案 B（对角亮线）→ 用户未选中
+3. **方案 C（wave-spin 回归）→ 用户选中**：直接回退波浪动画到原始 `rotate`（周期 4s/6s），靠旋转 blob 自带的光影效果恢复杯壁动感
+4. 气泡删除：用户反馈气泡过小、观感冗余 → 模板/script/CSS 全量移除
+5. 桌面端杯子间距过近：根因是 Round 1 加入的 `max-width: 960px` 在宽屏上挤压杯子 → 移除约束，回归旧方案网格自然填满视口
+
+**最终 Cylinder3D.vue 结构：**
+- 模板：`top-rim-back` → `liquid-area`（`liquid-fill` 含双层 wave(rotate) + meniscus）→ `glass-shine` → `progress-text` → `top-rim` → `hover-glow`
+- Script：`liquidColor` 引用 CSS token、`liquidStyle`（height + background）
+- 样式：wave-spin(rotate) + meniscus + rim 高光(offset-left radial) + glass-shine + hover-glow
+
+**最终文件变更：**
+| 文件 | 变更 |
+|------|------|
+| `main.css` | +11 行液体色 token（未变，同 Round 2） |
+| `Cylinder3D.vue` | 模板去 bubbles/light-sweep；script 去 bubbles computed；样式 wave 回 rotate，去 bubble/light-sweep CSS |
+| `HomePage.vue` | 去 `max-width: 960px` 约束 + 关联 CSS 规则（用户反馈桌面间距过近） |
+| `context.md` | 交接写入手 |
+
+**构建体积（最终）：**
+CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB 还小 0.32 KB）
 
 **关键决策点：**
 
-1. **架构方向分歧** — 波浪实现从第一轮的 `rotate`（旋转 blob）改为 `translateX` 往复晃动。rotate 方案视觉上像旋转的黏性 blob 而非波浪表面；translateX 方案更贴近液体水平晃动的物理直觉。两者都是 transform-only，性能无差异。此决策在全局者授权范围内（"SVG path 或 CSS 实现均可"）。
+1. **架构方向分歧** — 任务 6 最初要求「新增独立玻璃光影层」（不允许回退 wave），经 A/B/C 三方案对比后用户选择方案 C（wave-spin 回归）。这不是工作者擅自改方向，是用户实物对比后的明确选择。原 translateX 波浪的「液体晃动」语义虽更准确，但 rotate blob 的「杯壁光影循环」视觉反馈更好——用户优先选了观感。
 
-2. **安全相关** — 无。纯 CSS 动画 + 组件模板内 conditional rendering，无任何数据/逻辑变更。
+2. **安全相关** — 无。
 
-3. **接口/约定偏离** — 无。严格只改两个文件（`Cylinder3D.vue` + `main.css`），零扩散。分级色四级阈值 30/60/90 不变，`liquidStyle` 的 height/background 计算逻辑不变，props/emit 接口不变。`main.css` token 段为纯新增 8 行，不影响已有 token。
+3. **接口/约定偏离** — 任务 6 原要求「不得通过改回 wave rotate 实现」→ 用户选择推翻此约束。HomePage.vue 的 max-width 移除属本轮范围外的小修复（用户明确要求）。其余红线全部遵守。
 
-4. **已知问题** — Bubble 随机化是 deterministic pseudo-random（seed 基于 `progress` 值），同一进度的所有杯子气泡布局完全一致。这是有意设计（防每帧重新计算导致布局抖动），但视觉变化有限。若后续想要更多随机性，可改用 `video.id` 作为 seed 来源（不改接口，仅 `bubbles` computed 内部调整）。
+4. **已知问题** — 无阻断项。wave-spin 的 rotate blob 严格来说仍是「旋转的不规则形状」而非物理波浪，但视觉效果已满足用户。如需未来进一步优化，方向应是「保留 rotate 动感 + 让 blob 形状更接近真实液面波动」。
 
-**截图位置：**
-- `docs/screenshots/cup-normal.png` — 杯子常态特写
-- `docs/screenshots/cup-hover.png` — 杯子 hover 抬起 + glow 环
-- `docs/screenshots/home-mobile-cups.png` — 375px 手机宽度下 8 个杯子的网格布局
+## [2026-07-07 02:20] 全局者 — 任务 6 终版审查通过，第二轮全部关闭
 
-**Diff 范围（本轮严格两文件）：**
-| 文件 | 变更 |
-|------|------|
-| `client/src/assets/styles/main.css` | +8 行液体色 token（`--liquid-*-start/end`） |
-| `client/src/components/Cylinder3D.vue` | 模板新增 bubbles + meniscus；script 新增 `bubbles` computed；样式重写波浪 keyframes + bubble 动画 + rim gradient + meniscus |
+**审查：** 预检零命中（无需 critic）；diff 核对——Cylinder3D 无 bubble/light-sweep 死代码残留、wave-spin 回归就位；HomePage diff 仅 max-width 包裹层移除，零逻辑改动；构建通过，体积 51.43KB gz（比第二轮基线更小）。代码 commit `1af2bdc`。被否决方案 B 的遗留截图 cup-light-sweep.png 已删。
 
+**对偏离的裁定：** 任务 6「不得改回 wave rotate」约束被用户 A/B/C 实物对比推翻——用户拥有最终决定权，工作者如实申报，合规。HomePage.vue 超出两文件红线，属用户当场明确指令，合规。
 
-## [2026-07-07 01:10] 全局者 — 第二轮审查通过 + 补充任务 6「杯壁光影回归」
+**固化：** 用户三项实物决策（rotate 光影定版 / 气泡否决 / 网格不加 max-width）已写入「跨 Phase 关键约定」，防后续轮次以「更物理正确」为由回改。
 
-**审查：** 安全预检命中 1 处（Cylinder3D.vue:61 "Token"，实为 CSS 变量文档注释）→ 按规则 invoke critic → 全项 PASS：接口/阈值/液面计算未变、动画仅 transform/opacity、无新增依赖、token 注释无敏感信息。构建复核体积 +0.48KB gz 与自报一致。代码已 commit `e658951`。
-
-**用户反馈：** 第二轮波浪从 rotate 改 translateX 在授权范围内且方向正确（旧「波浪」实为旋转副产品），但副作用是原「杯壁循环旋转光影」消失，用户希望恢复动感。
-
-**决策：** 分层补齐而非回退——保留新波浪/气泡（液体层），新增独立「玻璃光影」层恢复循环观感，参数比旧版克制（周期 8-10s、低透明度）。已写入任务 6，红线不变。
-
-**移交工作者：** 执行任务 6，完成后回全局者复核（预检 + 截图/真机观感由用户确认）。
+**决策：** 第二轮（杯子活化）正式关闭。Phase「UI 视觉美化」整体待用户表态：满意即由全局者做 Phase 关闭归档。
