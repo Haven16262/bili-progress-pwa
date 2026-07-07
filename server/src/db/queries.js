@@ -29,7 +29,7 @@ export function updateVideo(id, fields) {
   const db = getDb()
   // Column names in `sets` are built from a hard-coded allowlist above —
   // never from user input. The string interpolation below is safe.
-  const allowed = ['custom_name', 'pinned', 'archived', 'progress_100_count']
+  const allowed = ['custom_name', 'pinned']
   const sets = []
   const vals = {}
   for (const key of allowed) {

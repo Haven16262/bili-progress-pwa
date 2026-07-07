@@ -25,6 +25,9 @@
         <button @click="fetchCandidates" class="add-modal-error__retry">重试</button>
       </div>
 
+      <!-- Add error -->
+      <div v-if="addError" class="add-modal-add-error">{{ addError }}</div>
+
       <!-- Empty -->
       <div v-else-if="candidates.length === 0" class="add-modal-empty">
         <p>没有可添加的视频</p>
@@ -86,20 +89,24 @@ async function fetchCandidates() {
   loading.value = false
 }
 
+const addError = ref('')
+
 async function addOne(item) {
+  addError.value = ''
   try {
-    const res = await api.addVideo({
+    await api.addVideo({
       bvid: item.bvid,
       title: item.title,
       progress: item.progress,
       duration: item.duration
     })
-    if (res.ok || res.error) {
-      // Remove from candidate list
-      candidates.value = candidates.value.filter(c => c.bvid !== item.bvid)
-      emit('added')
-    }
-  } catch { /* ignore */ }
+    // Success — remove from list and notify parent
+    candidates.value = candidates.value.filter(c => c.bvid !== item.bvid)
+    emit('added')
+  } catch (e) {
+    // Don't remove candidate on failure; show user-visible error
+    addError.value = e.message || '添加失败，请重试'
+  }
 }
 </script>
 
@@ -217,6 +224,15 @@ async function addOne(item) {
 
 .add-modal-error__retry:hover {
   background: var(--color-surface-hover);
+}
+
+.add-modal-add-error {
+  padding: 0.75rem 1.25rem;
+  background: rgb(248 113 113 / 0.1);
+  border-bottom: 1px solid rgb(248 113 113 / 0.2);
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  text-align: center;
 }
 
 .add-modal-empty {

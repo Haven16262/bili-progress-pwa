@@ -76,7 +76,7 @@ function initSchema() {
   // Seed default settings if not present
   const seed = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
   seed.run('sessdata', '')
-  seed.run('columns_per_row', '3')
+  // columns_per_row is client-side per device type; no longer seeded
   seed.run('last_sync_status', '')
   seed.run('last_sync_at', '')
 }

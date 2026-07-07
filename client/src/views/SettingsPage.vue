@@ -154,6 +154,12 @@ async function loadSettings() {
     const defaults = { mobile: 2, tablet: 3, desktop: 4 }
     columns.value = stored ? Math.max(1, Math.min(6, parseInt(stored, 10) || defaults[deviceType.value])) : (defaults[deviceType.value] || 3)
   } catch { /* ignore */ }
+
+  // Fetch server-side settings (sessdata_set only — value never exposed)
+  try {
+    const data = await api.getSettings()
+    sessdataSet.value = data.sessdata_set === true
+  } catch { /* ignore — keep default false */ }
 }
 
 async function loadSyncStatus() {

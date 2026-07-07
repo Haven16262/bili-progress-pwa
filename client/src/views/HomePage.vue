@@ -245,13 +245,14 @@ async function markCompleted() {
   if (!editingVideo.value) return
   if (!window.confirm('确定要将该视频标记为已看完吗？')) return
   try {
-    const res = await api.markVideoCompleted(editingVideo.value.id)
-    if (res.ok || res.error === undefined) {
-      const target = videos.value.find(item => item.id === editingVideo.value.id)
-      if (target) target.progress = 100
-      editingVideo.value = null
-    }
-  } catch { /* ignore */ }
+    await api.markVideoCompleted(editingVideo.value.id)
+    // Success — update local state
+    const target = videos.value.find(item => item.id === editingVideo.value.id)
+    if (target) target.progress = 100
+    editingVideo.value = null
+  } catch (e) {
+    window.alert(e.message || '操作失败，请重试')
+  }
 }
 </script>
 

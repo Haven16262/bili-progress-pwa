@@ -18,6 +18,7 @@
 import { ref, onMounted, provide } from 'vue'
 import PasswordGate from './components/PasswordGate.vue'
 import BottomNav from './components/BottomNav.vue'
+import { api } from './services/api.js'
 
 const authenticated = ref(false)
 const syncProblem = ref(false)
@@ -25,20 +26,13 @@ const syncProblem = ref(false)
 provide('syncProblem', syncProblem)
 
 onMounted(async () => {
-  const token = localStorage.getItem('token')
-  if (token) {
+  if (localStorage.getItem('token')) {
     try {
-      const res = await fetch('/api/auth/verify', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      if (res.ok) {
-        authenticated.value = true
-        checkSyncStatus()
-      } else {
-        localStorage.removeItem('token')
-      }
+      await api.verifyToken()
+      authenticated.value = true
+      checkSyncStatus()
     } catch {
-      // Server not available — don't clear in case it's just restarting
+      // Server unavailable or token expired — api.js already cleared token on 401
     }
   }
 })
@@ -50,11 +44,7 @@ function onUnlocked() {
 
 async function checkSyncStatus() {
   try {
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/sync/status', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
+    const data = await api.getSyncStatus()
     syncProblem.value = data.hasProblem === true
   } catch {
     // Transient network error — don't alarm

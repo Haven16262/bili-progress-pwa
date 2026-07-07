@@ -1,48 +1,94 @@
 const BASE = '/api'
-const token = () => localStorage.getItem('token')
 
-const headers = () => ({
-  'Content-Type': 'application/json',
-  ...(token() ? { Authorization: `Bearer ${token()}` } : {})
-})
+function token() {
+  return localStorage.getItem('token')
+}
+
+// ── Unified request wrapper ──
+
+class ApiError extends Error {
+  constructor(status, body) {
+    const message = typeof body?.error === 'string'
+      ? body.error
+      : `请求失败 (${status})`
+    super(message)
+    this.status = status
+    this.body = body
+  }
+}
+
+async function request(path, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(token() ? { Authorization: `Bearer ${token()}` } : {}),
+    ...options.headers
+  }
+
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, { ...options, headers })
+  } catch {
+    throw new ApiError(0, { error: '无法连接服务器' })
+  }
+
+  // 401 → clear token so PasswordGate reappears
+  if (res.status === 401) {
+    // Only clear auth token — never touch columns_* keys
+    localStorage.removeItem('token')
+    throw new ApiError(401, { error: '登录已过期，请重新输入密码' })
+  }
+
+  // Parse body (may be empty for 204 etc.)
+  let body
+  const ct = res.headers.get('content-type')
+  if (ct && ct.includes('application/json')) {
+    try { body = await res.json() } catch { /* empty */ }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, body || { error: `请求失败 (${res.status})` })
+  }
+
+  return body
+}
 
 export const api = {
   login: (password) =>
-    fetch(`${BASE}/auth/login`, { method: 'POST', headers: headers(), body: JSON.stringify({ password }) }).then(r => r.json()),
+    request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
+
+  verifyToken: () =>
+    request('/auth/verify'),
 
   getVideos: () =>
-    fetch(`${BASE}/videos`, { headers: headers() }).then(r => r.json()),
+    request('/videos'),
 
   addVideo: (video) =>
-    fetch(`${BASE}/videos`, { method: 'POST', headers: headers(), body: JSON.stringify(video) }).then(r => r.json()),
+    request('/videos', { method: 'POST', body: JSON.stringify(video) }),
 
   updateVideo: (id, data) =>
-    fetch(`${BASE}/videos/${id}`, { method: 'PUT', headers: headers(), body: JSON.stringify(data) }).then(r => r.json()),
+    request(`/videos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   deleteVideo: (id) =>
-    fetch(`${BASE}/videos/${id}`, { method: 'DELETE', headers: headers() }).then(r => r.json()),
+    request(`/videos/${id}`, { method: 'DELETE' }),
 
   triggerSync: () =>
-    fetch(`${BASE}/sync`, { method: 'POST', headers: headers() }).then(r => r.json()),
+    request('/sync', { method: 'POST' }),
 
   getRecentHistory: () =>
-    fetch(`${BASE}/bilibili/recent`, { headers: headers() }).then(r => r.json()),
+    request('/bilibili/recent'),
 
   updateSessdata: (sessdata) =>
-    fetch(`${BASE}/auth/sessdata`, { method: 'PUT', headers: headers(), body: JSON.stringify({ sessdata }) }).then(r => r.json()),
+    request('/auth/sessdata', { method: 'PUT', body: JSON.stringify({ sessdata }) }),
 
   getSettings: () =>
-    fetch(`${BASE}/settings`, { headers: headers() }).then(r => r.json()),
-
-  updateSettings: (settings) =>
-    fetch(`${BASE}/settings`, { method: 'PUT', headers: headers(), body: JSON.stringify(settings) }).then(r => r.json()),
+    request('/settings'),
 
   getSyncStatus: () =>
-    fetch(`${BASE}/sync/status`, { headers: headers() }).then(r => r.json()),
+    request('/sync/status'),
 
   markVideoCompleted: (id) =>
-    fetch(`${BASE}/videos/${id}/complete`, { method: 'POST', headers: headers() }).then(r => r.json()),
+    request(`/videos/${id}/complete`, { method: 'POST' }),
 
   getCompletedVideos: () =>
-    fetch(`${BASE}/videos/completed`, { headers: headers() }).then(r => r.json())
+    request('/videos/completed'),
 }

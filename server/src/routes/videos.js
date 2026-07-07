@@ -53,7 +53,7 @@ router.post('/', (req, res) => {
 // PUT /api/videos/:id — update local fields (custom_name, pinned)
 router.put('/:id', (req, res) => {
   const id = Number(req.params.id)
-  if (!id) return res.status(400).json({ error: '无效的 ID' })
+  if (!(Number.isInteger(id) && id > 0)) return res.status(400).json({ error: '无效的 ID' })
 
   const fields = {}
   if (req.body.custom_name !== undefined) {
@@ -74,7 +74,7 @@ router.put('/:id', (req, res) => {
 // DELETE /api/videos/:id — remove video from homepage
 router.delete('/:id', (req, res) => {
   const id = Number(req.params.id)
-  if (!id) return res.status(400).json({ error: '无效的 ID' })
+  if (!(Number.isInteger(id) && id > 0)) return res.status(400).json({ error: '无效的 ID' })
 
   const result = deleteVideo(id)
   if (result.changes === 0) {
@@ -86,7 +86,7 @@ router.delete('/:id', (req, res) => {
 // POST /api/videos/:id/complete — mark video as manually completed
 router.post('/:id/complete', (req, res) => {
   const id = Number(req.params.id)
-  if (!id) return res.status(400).json({ error: '无效的 ID' })
+  if (!(Number.isInteger(id) && id > 0)) return res.status(400).json({ error: '无效的 ID' })
 
   const result = markVideoCompleted(id)
   if (result.changes === 0) {
