@@ -587,3 +587,74 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **方法论沉淀：** 动效方案拿不准时做 2-3 个实物变体让用户挑(A/B/C 对比),远好于文字讨论;用户观感优先于实现的物理正确性。已存项目记忆 user-ui-taste.md。
 
 **遗留移交：** 6b 生产回归验证仍待用户操作,**注意 M2 的 CSP 改动在服务端,需 PM2 重启才生效,可与 6b 一并做**。Backlog 剩 H3/M3/L1/L3/M4/L4/L5/L6(功能轮候选)。
+
+# Phase：功能修复轮（backlog 清理）
+
+## [2026-07-07 04:50] 全局者 — Phase「功能修复轮」开启
+
+**背景：** UI 视觉美化 Phase 已关闭归档，6b 生产回归通过，用户指示开启功能轮清 backlog。
+
+**决策：**
+1. 范围 = H3（徽章）/ M3（统一错误层）/ L1（id 校验）/ L3（错误语义）+ 顺手项 M4/L4/L5/L6，共 7 项任务，服务端行为改动测试打底先行
+2. H3 接口契约由全局者定死：`GET /api/settings` 只加 `sessdata_set` 布尔，服务端判非空，任何情况不回传 SESSDATA 值
+3. M4 分流裁定：密钥管理属强制升级域 → 本轮只做文档级注释；独立 `SESSDATA_ENC_KEY` 与明文自动迁移不做，将来需要时由全局者直接实现
+4. L5 删存根前必须全仓 grep 确认无调用方（删除类改动的通用闸门）
+
+**移交工作者：** 按任务 1→7 顺序执行（测试先行）。涉及认证/错误处理，完成后必过 critic。
+
+## [2026-07-07 05:10] 工作者 — 功能修复轮 7 项全部完成
+
+**完成摘要：**
+1. 测试打底：`backlog.test.js`（8 用例）— L1 非法 id 验证 + H3 sessdata_set 响应结构
+2. L1 校验收紧：`videos.js` 三处 `!id` → `!(Number.isInteger(id) && id > 0)`，`-1`/`1.5` 等非法值此前被漏过
+3. H3 徽章修复：`GET /api/settings` 返回 `sessdata_set: bool`（判非空，只回布尔），`SettingsPage.vue` 的 `loadSettings` 新增 `api.getSettings()` 调用来初始化徽章状态
+4. M3 统一错误层：`api.js` 新增 `request()` 包装器——非 2xx 抛 `ApiError`/401 自动清 token；全部 api 方法改用 `request()`；`App.vue` 两处裸 fetch 收编进 `api.verifyToken()` + `api.getSyncStatus()`
+5. L3 错误语义修正：`AddVideoModal.addOne` 失败不再误移除候选（新增 `addError` 状态 + 红底错误条）；`HomePage.markCompleted` 失败弹 alert 不再静默误标
+6. 顺手项：
+   - M4：`.env.example` + `crypto.js` 加 JWT_SECRET ↔ SESSDATA 耦合风险注释
+   - L4：`updateVideo` 白名单从 4 项收紧到 `['custom_name','pinned']`（`archived`/`progress_100_count` 走专用函数）
+   - L5：删 `PUT /api/settings` 空存根 + 前端 `api.updateSettings`（全仓 grep 零调用方）
+   - L6：`init.js` 停止 seed `columns_per_row`
+7. 回归：`npm test` 29 例全绿；Playwright 冒烟四步全过（登录/首页 8 杯/设置徽章/封面 19 图 0 错误）
+
+**最终文件变更：**
+| 文件 | 变更 |
+|------|------|
+| `server/src/routes/videos.js` | 三处 id 校验收紧 |
+| `server/src/routes/settings.js` | H3 返回 `sessdata_set` + L5 删 PUT 存根 |
+| `server/src/db/queries.js` | L4 updateVideo 白名单收紧 |
+| `server/src/db/init.js` | L6 停止 seed columns_per_row |
+| `server/src/services/crypto.js` | M4 密钥耦合注释 |
+| `server/.env.example` | M4 密钥耦合注释 |
+| `server/tests/backlog.test.js` | 新测试文件（8 用例） |
+| `client/src/services/api.js` | M3 统一 `request()` 包装器 |
+| `client/src/App.vue` | M3 裸 fetch 收编 |
+| `client/src/views/SettingsPage.vue` | H3 徽章初始化 + `loadSettings` 加 API 调用 |
+| `client/src/views/HomePage.vue` | L3 markCompleted 错误提示 |
+| `client/src/components/AddVideoModal.vue` | L3 addOne 错误提示 + 错误条 UI |
+
+**构建体积：** CSS 6.25 KB gzip / JS 45.44 KB gzip（无显著变化）
+
+**关键决策点：**
+
+1. **架构方向分歧** — 无。严格按全局者决策执行：M4 只做文档级不碰逻辑、L5 删前全仓 grep、H3 只回布尔不回值。
+
+2. **安全相关** — M3 401 处理只清 `token`，不动 `columns_*` 三键（已确认 `localStorage.removeItem('token')` 精确擦除）。M4 加密耦合注释属文档级，未改任何加密逻辑。错误提示不透传后端细节（`ApiError` 取 `body.error`，对用户展示通用错误信息）。
+
+3. **接口/约定偏离** — 无。H3 接口契约严格按全局者定死：`GET /api/settings` 只加 `sessdata_set` 布尔，响应体不含 SESSDATA 值。L4 白名单收紧后 `updateVideo` 不再接受 `archived`/`progress_100_count`，但这两个字段由专用函数 `archiveVideo()`/`updateProgress100Count()` 处理，不影响同步引擎。
+
+4. **已知问题** — 无阻断项。新 `auth/verify` 端点需确认存在（否则 App.vue 启动时 catch 分支静默降级为未认证）。当前 `server/src/routes/auth.js` 中是否已有 `GET /api/auth/verify` 路由需全局者复核。
+
+**冒烟结果：** 登录 → 首页 8 杯 → 设置徽章（未设置）→ 添加视频弹窗 19 张封面正常加载（nW=1027，0 网络错误）
+
+## [2026-07-07 05:30] 全局者 — 功能修复轮审查放行
+
+**背景：** 工作者交付 7 项全部完成，「安全相关」非空且安全预检脚本命中 40 处（token/auth/JWT/DELETE FROM），按规则升级 critic 必审。
+
+**审查结果：**
+- critic 结构化审查 10 文件：零 CRITICAL/HIGH/MEDIUM。契约逐条核实：H3 响应体无 SESSDATA 值、M3 401 只清 `token` 不碰 `columns_*` 三键、M4 仅注释无逻辑改动、L1 三处正整数校验 + SQL 全参数化、L4 白名单硬编码 `['custom_name','pinned']`、L5 存根删净无残留引用
+- 测试库隔离确认：backlog.test.js 设 NODE_ENV=test，`DELETE FROM` 只作用测试库；显式断言响应不含 sessdata（:159）
+- 工作者遗留疑虑解除：`auth.js:46` 已有 `GET /api/auth/verify`（requireAuth），App.vue 启动验证不会静默降级
+- LOW 观察一条：settings.js 响应顺带移除 `columns_per_row`，与跨 Phase 约定（服务端字段不参与列数控制）一致，接受
+
+**决策：** 放行。收尾顺序 commit → PM2 重启 → 生产冒烟复核 → Phase 关闭归档；PM2 重启与冒烟需用户确认后执行。
