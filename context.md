@@ -9,9 +9,10 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** Phase「功能修复轮」已关闭（2026-07-07）
-**当前任务:** 无进行中任务。等待用户指定下一阶段方向
-**备注:** 2026-07-04 架构评审 backlog 已全部清空（H1/H2/M1/M5 同步轮、M2 ORB、H3/M3/L1/L3/M4/L4/L5/L6 功能轮）。唯一将来项：M4 完整版（独立 SESSDATA_ENC_KEY + 迁移），属密钥管理强制升级域，需要时由全局者直接实现
+**阶段:** Phase「动画品味改进轮」已关闭（2026-07-12，commit 见本 Phase 历史关闭总结）。当前无进行中 Phase，等待用户开启下一轮
+**当前任务:** 无。将来项：M4 完整版（独立 SESSDATA_ENC_KEY + 迁移，全局者实现域）
+**关键依据文档:** 本轮产出归档于 `plans/`（8 份自包含计划，状态全 DONE）+ `context_history.md`「Phase：动画品味改进轮」段
+**任务清单(给工作者):** 空
 
 ---
 
@@ -32,6 +33,7 @@
 - **B站 图片必须 CORS 加载（2026-07-07 M2 教训）**：Chrome ORB 会拦截跨域 no-cors `<img>`（ERR_BLOCKED_BY_ORB，且报错只在网络层，DOM 只见裂图）。任何加载 B站 封面（`*.hdslb.com`/`*.bilibili.com`）的 `<img>` 都必须带 `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`；CSP imgSrc 已含两域。首次误判为 CSP 问题，排查靠 Playwright 监听网络层
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **测试封闭性（2026-07-07 教训）**：测试必须在干净 shell 里可复现，不得依赖会话环境变量——工作者曾报「29 例全绿」实为其 shell 恰好导出了 JWT_SECRET，干净环境下新用例全被跳过。所需变量一律在 `server/vitest.config.js` 的 `test.env` 注入（现有 `TEST_DB=':memory:'` + 测试专用 JWT_SECRET）；**数据库隔离靠 TEST_DB，`NODE_ENV=test` 不隔离任何东西**。交接报测试结果前先在干净环境跑一遍
+- **reduced-motion 策略 = 去位移留反馈（2026-07-12 定版）**：`main.css` 的 RM 块对动画压 `duration+delay` 至 0.01ms（**二者必须同压——只压 duration 时 `animation-delay` 残留会让 stagger 类动画在 RM 下逐个弹出甚至长时间不可见**），过渡用 `transition-property` 白名单（opacity/color/background-color/border-color/box-shadow）保留反馈。后续新动画不必单独写 RM 分支，但用 `opacity:0` 起始 + delay 的入场动画必须确认被该块覆盖
 - **原生模块 ABI 迁移雷区（教训）**：`server/node_modules` 是 2026-05-22 在旧 DO 服务器（旧 Node 版本）装的，随项目一起搬到 Hetzner（06-24），但没人针对新机器的 Node 22 重新编译过。进程只有在重启那一刻才会因 `better-sqlite3` 原生插件 ABI 不匹配而崩溃（`ERR_DLOPEN_FAILED`），所以中间十天服务没重启，一直正常，直到 07-04 一次普通重启才暴露、连崩 7 次后 PM2 daemon 一并挂掉，导致 502。现已加 `server/scripts/start.sh` 自愈：启动前探测 ABI 不匹配则自动 `npm rebuild better-sqlite3` 再起服务；PM2 已切换为跑该脚本（`pm2 start scripts/start.sh --interpreter bash` + `pm2 save`），`npm start` 同步指向该脚本。以后任何原生模块迁移/Node 升级场景都有兜底。
 
 ---
@@ -40,14 +42,42 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-07-07 05:45] 全局者 — Phase「功能修复轮」关闭总结
+## [2026-07-12 16:15] 工作者 — R1 修复 + R2 运行时验证全绿
 
-**交付汇总：** 架构评审遗留 backlog 8 项全清——H3（`sessdata_set` 布尔徽章，绝不回传值）、M3（api.js 统一 `request()`/`ApiError`，401 只清 token）、L1（三处 :id 正整数校验）、L3（失败不再误判成功）、M4（密钥耦合文档注释）、L4（updateVideo 白名单两字段）、L5（删 PUT settings 存根）、L6（停 seed columns_per_row）。附带：全局者审查中发现测试不封闭（vitest 缺 JWT_SECRET 注入，工作者的「全绿」依赖 shell 环境变量），已修入 vitest.config.js。
+**完成情况：**
+- **R1**：main.css reduced-motion 块追加 `animation-delay: 0.01ms !important`，构建通过。
+- **R2**：用 Playwright（Chromium headless）对 001–007 逐一跑运行时验证，19 项全部通过：
 
-**commit 链：** `363c28b`(开启) → `8e4a7fd`(8 项实现 + 测试封闭性修复) → 本 docs 提交(关闭)
+| 计划 | 验证项 | 结果 |
+|------|--------|------|
+| 001 | hover 规则全部在 @media(hover:hover) 内，无裸 :hover transform | ✅ |
+| 002 | 模态 scale-in 入场 / close 后 v-if 移除 / rapid toggle 重开成功 | ✅ |
+| 003 | RM 块存在 / transition-property 白名单生效（非 duration 全灭） | ✅ |
+| R1 | RM 块 animation-delay: 0.01ms 已生效 | ✅ |
+| 004 | liquid-fill 使用 translateY transform（matrix 含 translate），transition 属性为 transform 非 height | ✅ |
+| 005 | nav-icon 有 transform transition；add-modal-item transition 含 transform | ✅ |
+| 006 | 首载后 liquid-fill transform 非 identity（注水已执行）；progress text 94%（count-up 完成） | ✅ |
+| 007 | stagger delays 正确递进（0s→0.04s→0.08s…）/ RM 下 8 个圆柱 opacity 全为 1 立即可见（R1 修复确认生效）/ 动画中可点击 | ✅ |
 
-**critic 总览：** 安全预检命中 40 处 → critic 结构化审查 10 文件，零 CRITICAL/HIGH/MEDIUM，放行。一处误述记录：critic 称隔离靠 NODE_ENV=test（实为 vitest env 的 TEST_DB），结论碰巧成立但机制说错——critic 报告中的机制性断言需全局者抽查验证。
+**关键发现：**
+- R1 修复前 RM stagger delays 为 `calc(var(--stagger)*40ms)`（最长 400ms），修复后压为 `1e-05s`（0.01ms），圆柱全部立即可见。
+- 第一次 RM 测试中 opacity 误报为 0 系测试脚本未等待数据加载完毕，修正后通过。
+- `@click.self` 在 `.modal-overlay` 上，Playwright 需通过"取消"按钮或 overlay 边距区域触发关闭。
 
-**生产验证（PM2 重启后，2026-07-07）：** HTTP 冒烟 8 项全过——/ 200、无 token 401、登录+verify 200、settings 只含 `sessdata_set:true` 无值泄露、视频 8 条、`-1`/`1.5`/`abc` 全 400、PUT settings 404。工作者 dev 冒烟报徽章「未设置」系空库实例假象，生产实测为「已设置」，H3 完成标准达成。
+**任务进度：**
+- [x] R1 reduced-motion 块补 animation-delay
+- [x] R2 运行时验证（19/19 全绿）
+- [x] 001–008 全部实现 + 修复 + 验证完成
 
-**backlog：** 空。唯一将来项 M4 完整版（独立 ENC_KEY，全局者实现域）。
+**关键决策点：**
+- 架构/接口变动：无
+- 安全相关：无
+- 偏离原计划：无
+- 未解决的疑虑：无
+
+## [2026-07-12 16:30] 全局者 — Phase「动画品味改进轮」关闭
+
+**交付汇总：** 8 份计划（001–008）全部落地 + 复审打回的 R1 修复 + Playwright 运行时验证 19/19 全绿。改动纯前端 6 文件：hover 触屏门控（001）、RM 去位移留反馈（003+R1）、双模态退场（002）、液面 height→transform（004）、按压反馈（005）、首载注水+count-up（006）、网格入场 stagger（007）、删 --ease-spring（008）。
+**审查轨迹：** 安全预检两轮零命中，未触发 critic。全局者抽查三处风险面（007 隐形风险/004 溢出裁剪/006 rAF 泄漏）均安全；打回 1 缺陷（RM 块漏压 animation-delay）+ 1 纪律项（8 条交接零运行时验证报告），二者均闭环。001 偏离（独立 media 块）接受。
+**新增跨 Phase 约定：** reduced-motion 策略定版（duration+delay 必须同压 + transition-property 白名单）。
+**backlog：** 空。唯一将来项 M4 完整版（独立 ENC_KEY，全局者实现域）。前段历史已归档 `context_history.md`。
