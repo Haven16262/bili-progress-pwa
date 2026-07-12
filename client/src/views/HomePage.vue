@@ -58,8 +58,10 @@
     <div v-else-if="isMobile" class="home-grid-scroll">
       <div class="grid gap-3" :style="gridStyle" style="width: max-content">
         <Cylinder3D
-          v-for="video in videos"
+          v-for="(video, i) in videos"
           :key="video.id"
+          class="animate-fade-in cylinder-stagger"
+          :style="{ '--stagger': Math.min(i, 10) }"
           :progress="video.progress"
           :custom-name="video.custom_name"
           :full-title="video.title"
@@ -71,8 +73,10 @@
     <!-- Grid (tablet / desktop: fluid columns, no max-width) -->
     <div v-else class="grid gap-3" :style="gridStyle">
         <Cylinder3D
-          v-for="video in videos"
+          v-for="(video, i) in videos"
           :key="video.id"
+          class="animate-fade-in cylinder-stagger"
+          :style="{ '--stagger': Math.min(i, 10) }"
           :progress="video.progress"
           :custom-name="video.custom_name"
           :full-title="video.title"
@@ -81,18 +85,21 @@
       </div>
 
     <!-- Add video modal -->
-    <AddVideoModal
-      v-if="showAdd"
-      @close="showAdd = false"
-      @added="onVideoAdded"
-    />
+    <Transition name="modal">
+      <AddVideoModal
+        v-if="showAdd"
+        @close="showAdd = false"
+        @added="onVideoAdded"
+      />
+    </Transition>
 
     <!-- Edit name modal -->
-    <div
-      v-if="editingVideo"
-      class="modal-overlay"
-      @click.self="editingVideo = null"
-    >
+    <Transition name="modal">
+      <div
+        v-if="editingVideo"
+        class="modal-overlay"
+        @click.self="editingVideo = null"
+      >
       <div class="modal-backdrop"></div>
       <div class="modal-sheet">
         <h3 class="modal-sheet__title">修改显示名称</h3>
@@ -121,6 +128,7 @@
         >标记为已看完</button>
       </div>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -315,10 +323,12 @@ async function markCompleted() {
   box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
 }
 
-.home-header__add-btn:hover {
-  background: var(--color-accent-hover);
-  transform: scale(1.08);
-  box-shadow: 0 4px 16px rgb(6 182 212 / 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .home-header__add-btn:hover {
+    background: var(--color-accent-hover);
+    transform: scale(1.08);
+    box-shadow: 0 4px 16px rgb(6 182 212 / 0.35);
+  }
 }
 
 .home-header__add-btn:focus-visible {
@@ -412,9 +422,11 @@ async function markCompleted() {
     transform var(--duration-fast) var(--ease-out);
 }
 
-.home-empty__btn:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .home-empty__btn:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+  }
 }
 
 .home-empty__btn:focus-visible {
@@ -423,6 +435,12 @@ async function markCompleted() {
 }
 
 /* ---- Grid ---- */
+
+.cylinder-stagger {
+  opacity: 0;
+  animation-delay: calc(var(--stagger) * 40ms);
+}
+
 .home-grid-scroll {
   overflow-x: auto;
   overflow-y: visible;
@@ -446,6 +464,24 @@ async function markCompleted() {
   position: absolute;
   inset: 0;
   background: rgb(0 0 0 / 0.6);
+}
+
+/* Edit name modal — Vue <Transition name="modal"> */
+.modal-enter-active {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.modal-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-leave-active .modal-sheet {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.modal-leave-to .modal-sheet {
+  transform: scale(0.97);
 }
 
 .modal-sheet {

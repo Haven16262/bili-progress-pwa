@@ -125,9 +125,11 @@ async function submit() {
     transform var(--duration-fast) var(--ease-out);
 }
 
-.gate-card__btn:hover {
-  background: var(--color-accent-hover);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .gate-card__btn:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+  }
 }
 
 .gate-card__btn:focus-visible {

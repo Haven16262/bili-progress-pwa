@@ -20,7 +20,7 @@
       <div class="glass-shine"></div>
 
       <!-- Progress number -->
-      <div class="progress-text">{{ Math.round(progress) }}%</div>
+      <div class="progress-text">{{ displayProgress ?? Math.round(progress) }}%</div>
 
       <!-- Front rim of top opening -->
       <div class="top-rim"></div>
@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 
 defineEmits(['click'])
 
@@ -44,6 +44,36 @@ const props = defineProps({
   customName: { type: String, default: '' },
   fullTitle: { type: String, default: '' }
 })
+
+// First-load fill-up animation state
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const FILL_DURATION_MS = 800  // matches --duration-liquid
+
+const isFilled = ref(REDUCED_MOTION)  // skip animation when reduced-motion
+const displayProgress = ref(REDUCED_MOTION ? undefined : 0)
+let rafId = 0
+
+onMounted(() => {
+  if (REDUCED_MOTION) return
+  requestAnimationFrame(() => {
+    isFilled.value = true
+    const start = performance.now()
+    const target = Math.round(Math.max(0, Math.min(100, props.progress)))
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / FILL_DURATION_MS)
+      const eased = 1 - Math.pow(1 - t, 3)  // cubic ease-out, matches --ease-out
+      displayProgress.value = Math.round(target * eased)
+      if (t < 1) {
+        rafId = requestAnimationFrame(tick)
+      } else {
+        displayProgress.value = undefined  // fall back to live value
+      }
+    }
+    rafId = requestAnimationFrame(tick)
+  })
+})
+
+onUnmounted(() => cancelAnimationFrame(rafId))
 
 const displayName = computed(() => props.customName || props.fullTitle || '未命名')
 
@@ -57,10 +87,13 @@ const liquidColor = computed(() => {
   return { start: 'var(--liquid-purple-start)', end: 'var(--liquid-purple-end)' }
 })
 
-const liquidStyle = computed(() => ({
-  height: `${Math.max(2, Math.min(100, props.progress))}%`,
-  background: `linear-gradient(180deg, ${liquidColor.value.start} 0%, ${liquidColor.value.end} 100%)`
-}))
+const liquidStyle = computed(() => {
+  const p = isFilled.value ? Math.max(2, Math.min(100, props.progress)) : 0
+  return {
+    transform: `translateY(${100 - p}%)`,
+    background: `linear-gradient(180deg, ${liquidColor.value.start} 0%, ${liquidColor.value.end} 100%)`
+  }
+})
 </script>
 
 <style scoped>
@@ -80,8 +113,10 @@ const liquidStyle = computed(() => ({
   transition: transform var(--duration-fast) var(--ease-out);
 }
 
-.cylinder-wrapper:hover {
-  transform: translateY(-3px);
+@media (hover: hover) and (pointer: fine) {
+  .cylinder-wrapper:hover {
+    transform: translateY(-3px);
+  }
 }
 
 .cylinder-wrapper:focus-visible {
@@ -125,12 +160,14 @@ const liquidStyle = computed(() => ({
     border-color var(--duration-normal) var(--ease-out);
 }
 
-.cylinder-wrapper:hover .cylinder-glass {
-  box-shadow:
-    inset 0 0 20px rgb(0 0 0 / 0.5),
-    0 4px 16px rgb(0 0 0 / 0.4),
-    0 0 24px rgb(6 182 212 / 0.1);
-  border-color: rgb(148 163 184 / 0.55);
+@media (hover: hover) and (pointer: fine) {
+  .cylinder-wrapper:hover .cylinder-glass {
+    box-shadow:
+      inset 0 0 20px rgb(0 0 0 / 0.5),
+      0 4px 16px rgb(0 0 0 / 0.4),
+      0 0 24px rgb(6 182 212 / 0.1);
+    border-color: rgb(148 163 184 / 0.55);
+  }
 }
 
 /* ---- Top rim (front — above liquid) ---- */
@@ -183,10 +220,11 @@ const liquidStyle = computed(() => ({
 
 .liquid-fill {
   position: absolute;
+  top: 0;
   bottom: 0;
   left: 0;
   right: 0;
-  transition: height var(--duration-liquid) var(--ease-out);
+  transition: transform var(--duration-liquid) var(--ease-out);
   border-radius: 0 0 26% 26%;
   overflow: hidden;
   box-shadow: inset 0 8px 16px rgb(255 255 255 / 0.1);
@@ -269,8 +307,10 @@ const liquidStyle = computed(() => ({
     0 0 20px rgb(6 182 212 / 0.04);
 }
 
-.cylinder-wrapper:hover .hover-glow {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .cylinder-wrapper:hover .hover-glow {
+    opacity: 1;
+  }
 }
 
 /* ---- Progress text ---- */
@@ -302,7 +342,9 @@ const liquidStyle = computed(() => ({
   transition: color var(--duration-fast) var(--ease-out);
 }
 
-.cylinder-wrapper:hover .cylinder-label {
-  color: var(--color-text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .cylinder-wrapper:hover .cylinder-label {
+    color: var(--color-text-primary);
+  }
 }
 </style>

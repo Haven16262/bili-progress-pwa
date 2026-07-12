@@ -95,8 +95,14 @@ const syncProblem = inject('syncProblem', ref(false))
   transition: transform var(--duration-fast) var(--ease-out);
 }
 
-.nav-link:hover .nav-icon {
-  transform: scale(1.1);
+@media (hover: hover) and (pointer: fine) {
+  .nav-link:hover .nav-icon {
+    transform: scale(1.1);
+  }
+}
+
+.nav-link:active .nav-icon {
+  transform: scale(0.95);
 }
 
 .nav-link--active .nav-icon {

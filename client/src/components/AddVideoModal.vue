@@ -111,6 +111,24 @@ async function addOne(item) {
 </script>
 
 <style scoped>
+/* ---- Vue <Transition name="modal"> (injected from parent) ---- */
+.modal-enter-active {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.modal-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+.modal-leave-active .add-modal-sheet {
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.modal-leave-to .add-modal-sheet {
+  transform: scale(0.97);
+}
+
 /* ---- Overlay ---- */
 .add-modal-overlay {
   position: fixed;
@@ -226,6 +244,10 @@ async function addOne(item) {
   background: var(--color-surface-hover);
 }
 
+.add-modal-error__retry:active {
+  transform: scale(0.97);
+}
+
 .add-modal-add-error {
   padding: 0.75rem 1.25rem;
   background: rgb(248 113 113 / 0.1);
@@ -266,7 +288,7 @@ async function addOne(item) {
   font: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background var(--duration-fast) var(--ease-out);
+  transition: background var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
 }
 
 .add-modal-item:hover {
@@ -276,6 +298,11 @@ async function addOne(item) {
 .add-modal-item:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: -2px;
+}
+
+.add-modal-item:active {
+  transform: scale(0.98);
+  background: rgb(255 255 255 / 0.05);
 }
 
 .add-modal-item:last-child {
