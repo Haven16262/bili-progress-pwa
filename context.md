@@ -13,6 +13,10 @@
 **当前任务:** 无。将来项：M4 完整版（独立 SESSDATA_ENC_KEY + 迁移，全局者实现域）
 **关键依据文档:** 本轮产出归档于 `plans/`（8 份自包含计划，状态全 DONE）+ `context_history.md`「Phase：动画品味改进轮」段
 **任务清单(给工作者):** 空
+**下次开 Phase 顺手项（2026-07-12 全局者查证，非紧急）:** 清掉 2 个 Dependabot 告警，均为传递依赖、实际暴露面极小：
+- qs（medium，GHSA-q8mj-m7cp-5q26）：express/body-parser 精确锁版带入 6.14.2/6.15.1，`npm update` 带不动——在 `server/package.json` 加 `"overrides": { "qs": "^6.15.2" }` 后 `npm install`。漏洞点在 `qs.stringify` 特定选项组合，服务端无此调用路径，仅为归零告警
+- @babel/core（low，GHSA-4x5r-pxfx-6jf8）：`cd client && npm update @babel/core` 升到 ≥7.29.6（workbox-build 是 ^7 范围，可直升）。纯构建期工具链，产物不含 babel
+- 完成标准：`gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts` 无 open 告警。**注意：server 动了 node_modules，按跨 Phase 测试封闭性约定跑干净环境测试，重启走 start.sh（ABI 自愈）**
 
 ---
 
