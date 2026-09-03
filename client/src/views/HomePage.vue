@@ -268,7 +268,6 @@ async function markCompleted() {
 /* ---- Page container ---- */
 .home-page {
   padding: var(--space-section);
-  padding-bottom: 5rem;
 }
 
 /* ---- Header ---- */
@@ -284,16 +283,18 @@ async function markCompleted() {
 }
 
 .home-header__title {
-  font-size: var(--text-lg);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
   line-height: 1.3;
 }
 
 .home-header__stats {
-  margin-top: 4px;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  margin-top: 7px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
 }
 
 .home-header__dot {
@@ -301,33 +302,40 @@ async function markCompleted() {
   opacity: 0.5;
 }
 
+/* ---- Add button — glass white control (主按钮不再纯青实心) ---- */
 .home-header__add-btn {
   flex-shrink: 0;
-  width: 2.25rem;
-  height: 2.25rem;
+  width: 42px;
+  height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border: none;
-  border-radius: 50%;
-  font-size: 1.25rem;
-  font-weight: 700;
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-control);
+  border-radius: 16px;
+  -webkit-backdrop-filter: blur(var(--glass-blur-control));
+  backdrop-filter: blur(var(--glass-blur-control));
+  color: #fff;
+  font-size: 22px;
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
   transition:
     background var(--duration-fast) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out),
-    box-shadow var(--duration-fast) var(--ease-out);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+    transform var(--duration-fast) var(--ease-out);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-header__add-btn {
+    background: var(--color-surface-secondary);
+  }
 }
 
 @media (hover: hover) and (pointer: fine) {
   .home-header__add-btn:hover {
-    background: var(--color-accent-hover);
+    background: var(--glass-bg-control-hover);
     transform: scale(1.08);
-    box-shadow: 0 4px 16px rgb(6 182 212 / 0.35);
   }
 }
 
@@ -340,13 +348,15 @@ async function markCompleted() {
   transform: scale(0.95);
 }
 
-/* ---- Sync problem banner ---- */
+/* ---- Sync problem banner — red-tinted glass ---- */
 .home-banner {
   margin-bottom: var(--space-section);
   padding: 0.625rem 1rem;
-  background: rgb(248 113 113 / 0.12);
-  border: 1px solid rgb(248 113 113 / 0.3);
-  border-radius: var(--radius-lg);
+  background: rgb(248 113 113 / 0.10);
+  border: 1px solid rgb(248 113 113 / 0.25);
+  border-radius: 16px;
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -356,8 +366,14 @@ async function markCompleted() {
   transition: background var(--duration-fast) var(--ease-out);
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-banner {
+    background: rgb(127 29 29 / 0.5);
+  }
+}
+
 .home-banner:active {
-  background: rgb(248 113 113 / 0.22);
+  background: rgb(248 113 113 / 0.18);
 }
 
 .home-banner__icon {
@@ -410,21 +426,29 @@ async function markCompleted() {
 .home-empty__btn {
   margin-top: 1rem;
   padding: 0.5rem 1rem;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border: none;
-  border-radius: var(--radius-lg);
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-control);
+  border-radius: var(--glass-radius-control);
+  -webkit-backdrop-filter: blur(var(--glass-blur-control));
+  backdrop-filter: blur(var(--glass-blur-control));
+  color: #fff;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .home-empty__btn {
+    background: var(--color-surface-secondary);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .home-empty__btn:hover {
-    background: var(--color-accent-hover);
+    background: var(--glass-bg-control-hover);
     transform: translateY(-1px);
   }
 }
@@ -486,16 +510,24 @@ async function markCompleted() {
 
 .modal-sheet {
   position: relative;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-2xl);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
   width: 100%;
   max-width: 24rem;
   padding: 1.25rem;
-  box-shadow: 0 16px 48px rgb(0 0 0 / 0.5);
+  box-shadow: var(--glass-shadow), 0 16px 48px rgb(0 0 0 / 0.5);
   max-height: 85dvh;
   overflow-y: auto;
   animation: scale-in var(--duration-normal) var(--ease-out) forwards;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .modal-sheet {
+    background: var(--color-surface-elevated);
+  }
 }
 
 .modal-sheet__title {
@@ -517,9 +549,9 @@ async function markCompleted() {
 .modal-sheet__input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: var(--glass-radius-control);
   font-size: var(--text-sm);
   color: var(--color-text-primary);
   outline: none;
@@ -531,7 +563,7 @@ async function markCompleted() {
 }
 
 .modal-sheet__input::placeholder {
-  color: var(--color-text-muted);
+  color: rgb(244 242 251 / 0.6);
 }
 
 .modal-sheet__actions {
@@ -544,7 +576,7 @@ async function markCompleted() {
   flex: 1;
   padding: 0.5rem 0;
   border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--glass-radius-control);
   font-size: var(--text-sm);
   cursor: pointer;
   transition:
@@ -562,32 +594,41 @@ async function markCompleted() {
 }
 
 .modal-sheet__btn--secondary {
-  background: var(--color-surface-secondary);
+  background: rgb(255 255 255 / 0.06);
   color: var(--color-text-secondary);
 }
 
 .modal-sheet__btn--secondary:hover {
-  background: var(--color-surface-hover);
+  background: rgb(255 255 255 / 0.10);
 }
 
 .modal-sheet__btn--primary {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  font-weight: 600;
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-control);
+  -webkit-backdrop-filter: blur(var(--glass-blur-control));
+  backdrop-filter: blur(var(--glass-blur-control));
+  color: #fff;
+  font-weight: 700;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .modal-sheet__btn--primary {
+    background: var(--color-surface-secondary);
+  }
 }
 
 .modal-sheet__btn--primary:hover {
-  background: var(--color-accent-hover);
+  background: var(--glass-bg-control-hover);
 }
 
 .modal-sheet__btn-done {
   width: 100%;
   margin-top: 0.5rem;
   padding: 0.5rem 0;
-  background: var(--color-surface-secondary);
+  background: rgb(255 255 255 / 0.06);
   border: none;
-  border-radius: var(--radius-lg);
-  color: var(--color-text-muted);
+  border-radius: var(--glass-radius-control);
+  color: var(--color-text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
   transition:
@@ -596,8 +637,8 @@ async function markCompleted() {
 }
 
 .modal-sheet__btn-done:hover {
-  background: var(--color-surface-hover);
-  color: var(--color-text-secondary);
+  background: rgb(255 255 255 / 0.10);
+  color: var(--color-text-primary);
 }
 
 .modal-sheet__btn-done:focus-visible {

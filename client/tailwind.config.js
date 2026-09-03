@@ -4,38 +4,38 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Semantic surface tokens — dark theme layered hierarchy
+        // Semantic surface tokens — liquid glass layered hierarchy (sync with main.css)
         surface: {
-          DEFAULT: '#1e293b',       // slate-800 — card bg
-          secondary: '#334155',     // slate-700 — input/button bg
-          hover: '#374356',         // slightly lighter than DEFAULT
-          muted: 'rgb(30 41 59 / 0.5)', // semi-transparent for info sections
-          elevated: '#253349',      // between DEFAULT and secondary
+          DEFAULT: '#1d1d31',            // opaque glass fallback (T7)
+          secondary: 'rgb(255 255 255 / 0.06)', // input/button bg
+          hover: 'rgb(255 255 255 / 0.10)',
+          muted: 'rgb(255 255 255 / 0.04)', // semi-transparent for info sections
+          elevated: '#26263c',
         },
         // Semantic text tokens
         text: {
-          primary: '#f1f5f9',       // slate-100
-          secondary: '#cbd5e1',     // slate-300
-          muted: '#64748b',         // slate-500
+          primary: '#f4f2fb',
+          secondary: 'rgb(244 242 251 / 0.6)',
+          muted: 'rgb(244 242 251 / 0.5)',
         },
         // Semantic border tokens
         border: {
-          DEFAULT: '#334155',       // slate-700
-          subtle: 'rgb(51 65 85 / 0.5)',
-          focus: '#22d3ee',         // cyan-400
+          DEFAULT: 'rgb(255 255 255 / 0.14)',
+          subtle: 'rgb(255 255 255 / 0.10)',
+          focus: '#22d3ee',              // cyan-400
         },
-        // Accent — cyan primary
+        // Accent — cyan, reserved for focus rings / nav-active / semantic feedback
         accent: {
-          DEFAULT: '#06b6d4',       // cyan-500
-          hover: '#22d3ee',         // cyan-400
-          muted: 'rgb(6 182 212 / 0.15)',
-          text: '#000000',          // text on accent bg
+          DEFAULT: '#22d3ee',            // cyan-400
+          hover: '#67e8f9',              // cyan-300
+          muted: 'rgb(34 211 238 / 0.15)',
+          text: '#082026',               // text on accent bg
         },
         // Semantic feedback colors
         feedback: {
-          success: '#4ade80',       // green-400
-          warning: '#facc15',       // yellow-400
-          danger: '#f87171',        // red-400
+          success: '#4ade80',            // green-400
+          warning: '#facc15',            // yellow-400
+          danger: '#f87171',             // red-400
         },
       },
       borderRadius: {

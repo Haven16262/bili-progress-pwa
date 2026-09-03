@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #3f8fc4; } a:hover { color: #2f6f9c; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; color: #2b2a33;
+     font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #f6f3ec;">
+
+  <div style="padding: 30px 22px 16px; font-family: 'Fredoka', sans-serif; font-size: 27px; font-weight: 600;">设置</div>
+
+  <div style="display: flex; flex-direction: column; gap: 14px; padding: 6px 20px 0;">
+
+    <div style="background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07); padding: 18px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 600;">B 站 Cookie (SESSDATA)</div>
+        <span style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+             color: #2f8a5e; background: #dff2e7;">已设置</span>
+      </div>
+      <div style="font-size: 11.5px; color: #8a8794; line-height: 1.6; margin-bottom: 14px; font-weight: 600;">
+        F12 → Application → Cookies → 复制 SESSDATA 的值。有效期约半年。</div>
+      <div style="display: flex; gap: 10px;">
+        <div style="flex: 1; padding: 11px 13px; background: #f3f0e8; border-radius: 14px; font-size: 13px;
+             color: #a8a4af; font-weight: 600;">粘贴 SESSDATA…</div>
+        <button style="padding: 0 18px; border: none; border-radius: 14px; background: #7bd3a6; color: #10402c;
+             font-size: 13px; font-weight: 700;">保存</button>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07); padding: 18px;">
+      <div style="font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 16px;">每行显示数量</div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div style="flex: 1; height: 8px; border-radius: 999px; background: #ece8df; position: relative;">
+          <div style="position: absolute; left: 0; top: 0; bottom: 0; width: 45%; border-radius: 999px; background: #7bb8ea;"></div>
+          <div style="position: absolute; left: 45%; top: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px;
+               border-radius: 50%; background: #fff; box-shadow: 0 3px 10px rgba(43,42,51,0.2);"></div>
+        </div>
+        <span style="font-family: 'Fredoka', sans-serif; font-size: 16px; width: 18px; text-align: center;">3</span>
+      </div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07); padding: 18px;">
+      <div style="font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 10px;">数据同步</div>
+      <div style="font-size: 11.5px; color: #8a8794; line-height: 1.6; margin-bottom: 14px; font-weight: 600;">
+        上次同步：<span style="color: #2f8a5e;">成功</span> · 9/2 03:07 · 更新 4 个视频</div>
+      <button style="padding: 11px 22px; border: none; border-radius: 14px; background: #7bd3a6; color: #10402c;
+           font-size: 13px; font-weight: 700;">立即同步</button>
+      <div style="margin-top: 10px; font-size: 11px; color: #a8a4af; font-weight: 600;">定时任务每天 03:07 自动执行</div>
+    </div>
+
+    <div style="background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07); padding: 18px;
+         display: flex; align-items: center; justify-content: space-between;">
+      <div style="font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 600;">已观看完视频</div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8a8794" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+
+    <div style="background: #efece3; border-radius: 24px; padding: 16px 18px; font-size: 11px;
+         color: #9a96a2; line-height: 1.7; font-weight: 600;">
+      Bili Progress PWA v1.0<br>进度以 B 站为准，名称与置顶以本地为准<br>进度 100% 持续 3 天后自动归档
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 14px; right: 14px; bottom: 16px; display: flex; border-radius: 22px;
+       background: #ffffff; box-shadow: 0 8px 24px rgba(43,42,51,0.12); padding: 12px 0;">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #b3afba;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span style="font-size: 10.5px; font-weight: 700;">主页</span>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #4aa87e;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span style="font-size: 10.5px; font-weight: 700;">设置</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

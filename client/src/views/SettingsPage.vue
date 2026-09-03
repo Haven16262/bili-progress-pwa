@@ -235,12 +235,13 @@ function formatTime(iso) {
 /* ---- Page layout ---- */
 .settings-page {
   padding: var(--space-section);
-  padding-bottom: 5rem;
 }
 
 .settings-title {
-  font-size: var(--text-lg);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.625rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   color: var(--color-text-primary);
   margin-bottom: var(--space-section);
 }
@@ -253,19 +254,29 @@ function formatTime(iso) {
   gap: var(--space-card-gap);
 }
 
-/* ---- Card ---- */
+/* ---- Card — glass panel ---- */
 .settings-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
-  padding: 1rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
+  padding: 1.125rem;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .settings-card {
+    background: var(--color-surface);
+  }
 }
 
 .settings-card--muted {
   background: var(--color-surface-muted);
   border-color: transparent;
+  box-shadow: none;
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   line-height: 1.6;
 }
 
@@ -289,13 +300,13 @@ function formatTime(iso) {
 
 .settings-card__hint {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
   flex-shrink: 0;
 }
 
 .settings-card__desc {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
   margin-bottom: 0.75rem;
   line-height: 1.5;
 }
@@ -317,44 +328,49 @@ function formatTime(iso) {
 .settings-card__footnote {
   margin-top: 0.5rem;
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
 }
 
 .settings-card__empty {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
 }
 
-/* ---- Badges ---- */
+/* ---- Badges — tinted pill per 视觉稿 ---- */
 .badge {
-  font-size: var(--text-xs);
-  padding: 0.125rem 0.5rem;
-  border-radius: var(--radius-sm);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
   flex-shrink: 0;
   line-height: 1.4;
 }
 
 .badge--success {
-  color: var(--color-success);
-  background: rgb(74 222 128 / 0.1);
+  /* green-300：叠绿色药丸底 + 玻璃 + 晕染仍过 AA（T8 实测，green-400 只有 3.4:1） */
+  color: #86efac;
+  background: rgb(74 222 128 / 0.16);
+  border-color: rgb(74 222 128 / 0.3);
 }
 
 .badge--warning {
   color: var(--color-warning);
-  background: rgb(250 204 21 / 0.1);
+  background: rgb(250 204 21 / 0.16);
+  border-color: rgb(250 204 21 / 0.3);
 }
 
 .badge--muted {
-  color: var(--color-text-muted);
-  background: rgb(100 116 139 / 0.1);
+  color: var(--color-text-on-glass);
+  background: rgb(255 255 255 / 0.06);
+  border-color: rgb(255 255 255 / 0.10);
 }
 
 /* ---- Input ---- */
 .settings-input {
   padding: 0.5rem 0.75rem;
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: var(--glass-radius-control);
   font-size: var(--text-sm);
   color: var(--color-text-primary);
   outline: none;
@@ -367,14 +383,13 @@ function formatTime(iso) {
 }
 
 .settings-input::placeholder {
-  color: var(--color-text-muted);
+  color: rgb(244 242 251 / 0.6);
 }
 
 /* ---- Buttons ---- */
 .settings-btn {
   padding: 0.5rem 1rem;
-  border: none;
-  border-radius: var(--radius-lg);
+  border-radius: var(--glass-radius-control);
   font-size: var(--text-sm);
   cursor: pointer;
   transition:
@@ -393,14 +408,24 @@ function formatTime(iso) {
   transform: scale(0.97);
 }
 
+/* 主操作按钮 = 玻璃白（全局者决策 3），不再纯青实心 */
 .settings-btn--primary {
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  font-weight: 600;
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-control);
+  -webkit-backdrop-filter: blur(var(--glass-blur-control));
+  backdrop-filter: blur(var(--glass-blur-control));
+  color: #fff;
+  font-weight: 700;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .settings-btn--primary {
+    background: var(--color-surface-secondary);
+  }
 }
 
 .settings-btn--primary:hover:not(:disabled) {
-  background: var(--color-accent-hover);
+  background: var(--glass-bg-control-hover);
 }
 
 .settings-btn--primary:disabled {
@@ -409,12 +434,13 @@ function formatTime(iso) {
 }
 
 .settings-btn--secondary {
-  background: var(--color-surface-secondary);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.10);
   color: var(--color-text-secondary);
 }
 
 .settings-btn--secondary:hover {
-  background: var(--color-surface-hover);
+  background: rgb(255 255 255 / 0.10);
 }
 
 /* "立即同步" — capped width, not full-width */
@@ -438,6 +464,7 @@ function formatTime(iso) {
 }
 
 /* ---- Slider ---- */
+/* 原生 range + accent-color：跨浏览器稳定，避免手写 track 的 webkit/moz 分叉 */
 .settings-slider {
   flex: 1;
   accent-color: var(--color-accent);
@@ -446,7 +473,8 @@ function formatTime(iso) {
 
 .settings-slider__value {
   font-size: var(--text-sm);
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-display);
+  font-weight: 700;
   color: var(--color-text-primary);
   width: 1.5rem;
   text-align: center;
@@ -456,13 +484,13 @@ function formatTime(iso) {
 /* ---- Sync status ---- */
 .settings-sync-status {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
   line-height: 1.6;
   margin-bottom: 0.75rem;
 }
 
 .settings-sync-status__detail {
-  color: var(--color-text-muted);
+  color: var(--color-text-on-glass);
   opacity: 0.7;
 }
 

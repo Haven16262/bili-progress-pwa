@@ -42,34 +42,47 @@ const syncProblem = inject('syncProblem', ref(false))
 </script>
 
 <style scoped>
-/* ---- Nav bar container ---- */
+/* ---- Nav bar container — floating glass bar (视觉稿 + 全局者决策 2) ---- */
 .nav-bar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  left: 16px;
+  right: 16px;
+  bottom: 18px;
   display: flex;
-  background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
-  z-index: 50;
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border-nav);
+  border-radius: var(--glass-radius-nav);
+  -webkit-backdrop-filter: blur(var(--glass-blur-nav));
+  backdrop-filter: blur(var(--glass-blur-nav));
+  box-shadow: var(--glass-shadow-nav);
+  z-index: 50; /* 弹窗遮罩 z-[51] 契约不变（WORKFLOW.md 层级约定） */
+  /* iOS 安全区改为 margin 应用：浮起条上移，不挤压自身内容 */
+  margin-bottom: env(safe-area-inset-bottom, 0);
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nav-bar {
+    background: var(--color-surface);
+  }
+}
+
+
 /* ---- Nav link — default state ---- */
+/* 未激活 0.65：叠底部紫色晕染 + 玻璃底仍过 WCAG AA（T8 实测 5.1:1） */
 .nav-link {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 0.5rem 0;
-  color: var(--color-text-muted);
+  color: rgb(255 255 255 / 0.65);
   text-decoration: none;
   transition: color var(--duration-fast) var(--ease-out);
   position: relative;
 }
 
 .nav-link:hover {
-  color: var(--color-text-secondary);
+  color: rgb(255 255 255 / 0.85);
 }
 
 .nav-link:focus-visible {
@@ -124,6 +137,16 @@ const syncProblem = inject('syncProblem', ref(false))
   height: 8px;
   background: var(--color-danger);
   border-radius: 50%;
-  box-shadow: 0 0 0 2px var(--color-surface);
+  box-shadow: 0 0 0 2px var(--color-page);
+}
+
+/* ---- 桌面/平板：浮起条限宽居中（用户拍板，2026-09-03） ----
+   fixed + left/right:16px 先拉伸，max-width 收紧为胶囊，
+   margin-inline:auto 吃掉两侧余量居中；≤768px 手机端无此规则，维持现状 */
+@media (min-width: 769px) {
+  .nav-bar {
+    max-width: 420px;
+    margin-inline: auto;
+  }
 }
 </style>

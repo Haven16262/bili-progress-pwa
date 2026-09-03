@@ -14,3 +14,6 @@ server/backups/
 
 # 迁移后待办（含部署细节，不公开）
 KNOWN-ISSUES.md
+
+# /design 生成的 canvas 编辑器 payload（2MB 压缩产物，可由 canvas-src/*.dc.html 经 seed 脚本重生）
+plans/ui-refresh/canvas-src/bili-pwa-visual-refresh.html

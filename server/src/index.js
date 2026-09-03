@@ -25,12 +25,13 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      // Google Fonts 样式表（Manrope display 字体，2026-09-03 视觉翻新引入）
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       // 无 scheme 前缀的 host-source 允许任意 scheme,但 HTTPS 页面加载 HTTP 图片
       // 仍会被浏览器混合内容策略(MCA)拦截,实际只放行 HTTPS——不是安全放宽
       imgSrc: ["'self'", "*.bilibili.com", "*.hdslb.com", "data:"],
       connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       formAction: ["'self'"],
       baseUri: ["'self'"]
     }

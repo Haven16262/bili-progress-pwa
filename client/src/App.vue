@@ -2,7 +2,8 @@
   <div class="h-screen flex flex-col">
     <PasswordGate v-if="!authenticated" @unlocked="onUnlocked" />
     <template v-else>
-      <main class="flex-1 pb-16 overflow-auto">
+      <!-- 底部留白 = 浮起导航条高度 + 18px 悬浮间距 + iOS 安全区（T5 完成标准 ③） -->
+      <main class="flex-1 overflow-auto pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
         <router-view v-slot="{ Component, route }">
           <Transition name="page-fade" mode="out-in">
             <component :is="Component" :key="route.path" />

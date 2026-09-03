@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito+Sans:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; }
+    a { color: #3f8fc4; } a:hover { color: #2f6f9c; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; color: #2b2a33;
+     font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, sans-serif; background: #f6f3ec;">
+
+  <!-- Header -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 30px 22px 18px;">
+    <div>
+      <div style="font-family: 'Fredoka', sans-serif; font-size: 27px; font-weight: 600; color: #2b2a33;">观看进度</div>
+      <div style="margin-top: 4px; font-size: 12.5px; color: #8a8794; font-weight: 600;">
+        6 个视频 · 平均 50%</div>
+    </div>
+    <button style="width: 44px; height: 44px; border-radius: 16px; border: none; cursor: pointer;
+         background: #7bd3a6; color: #10402c; font-size: 24px; font-weight: 600; line-height: 1;
+         box-shadow: 0 6px 16px rgba(123,211,166,0.5);">+</button>
+  </div>
+
+  <!-- Cup grid -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; padding: 12px 20px 0;">
+
+    <!-- card -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 12px 14px;
+         background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07);">
+      <div style="position: relative; width: 88px; height: 138px; border: 2px solid #e7e3da; border-top: none;
+           border-radius: 6px 6px 30px 30px; overflow: hidden; background: #f3f0e8;">
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 94%;
+             background: linear-gradient(180deg, #b98ff0, #9a63e6);"></div>
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 600; color: #fff;
+             text-shadow: 0 1px 4px rgba(0,0,0,0.28);">94%</div>
+      </div>
+      <div style="font-size: 11.5px; font-weight: 700; color: #6b6875; max-width: 120px; text-align: center;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Rust 所有权 · 第 3 讲</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 12px 14px;
+         background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07);">
+      <div style="position: relative; width: 88px; height: 138px; border: 2px solid #e7e3da; border-top: none;
+           border-radius: 6px 6px 30px 30px; overflow: hidden; background: #f3f0e8;">
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 62%;
+             background: linear-gradient(180deg, #9d8bf2, #7a63e0);"></div>
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 600; color: #fff;
+             text-shadow: 0 1px 4px rgba(0,0,0,0.28);">62%</div>
+      </div>
+      <div style="font-size: 11.5px; font-weight: 700; color: #6b6875; max-width: 120px; text-align: center;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">现代宇宙学 Ep.7</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 12px 14px;
+         background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07);">
+      <div style="position: relative; width: 88px; height: 138px; border: 2px solid #e7e3da; border-top: none;
+           border-radius: 6px 6px 30px 30px; overflow: hidden; background: #f3f0e8;">
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 38%;
+             background: linear-gradient(180deg, #7bb8ea, #4f97dc);"></div>
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 600; color: #fff;
+             text-shadow: 0 1px 4px rgba(0,0,0,0.28);">38%</div>
+      </div>
+      <div style="font-size: 11.5px; font-weight: 700; color: #6b6875; max-width: 120px; text-align: center;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Linux 内核导读</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 12px 14px;
+         background: #ffffff; border-radius: 24px; box-shadow: 0 8px 22px rgba(43,42,51,0.07);">
+      <div style="position: relative; width: 88px; height: 138px; border: 2px solid #e7e3da; border-top: none;
+           border-radius: 6px 6px 30px 30px; overflow: hidden; background: #f3f0e8;">
+        <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 21%;
+             background: linear-gradient(180deg, #5ec8d8, #33a7bc);"></div>
+        <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-family: 'Fredoka', sans-serif; font-size: 21px; font-weight: 600; color: #fff;
+             text-shadow: 0 1px 4px rgba(0,0,0,0.28);">21%</div>
+      </div>
+      <div style="font-size: 11.5px; font-weight: 700; color: #6b6875; max-width: 120px; text-align: center;
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">数据库系统 15-445</div>
+    </div>
+  </div>
+
+  <!-- Bottom nav -->
+  <div style="position: absolute; left: 14px; right: 14px; bottom: 16px; display: flex; border-radius: 22px;
+       background: #ffffff; box-shadow: 0 8px 24px rgba(43,42,51,0.12); padding: 12px 0;">
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #4aa87e;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span style="font-size: 10.5px; font-weight: 700;">主页</span>
+    </div>
+    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; color: #b3afba;">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+        stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span style="font-size: 10.5px; font-weight: 700;">设置</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

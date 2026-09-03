@@ -62,18 +62,28 @@ async function submit() {
 .gate-card {
   width: 100%;
   max-width: 24rem;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-xl);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow);
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gate-card {
+    background: var(--color-surface-elevated);
+  }
+}
+
 .gate-card__title {
+  font-family: var(--font-display);
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-text-primary);
   text-align: center;
 }
@@ -87,9 +97,9 @@ async function submit() {
 .gate-card__input {
   width: 100%;
   padding: 0.5rem 0.75rem;
-  background: var(--color-surface-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: var(--glass-radius-control);
   font-size: var(--text-sm);
   color: var(--color-text-primary);
   outline: none;
@@ -101,7 +111,7 @@ async function submit() {
 }
 
 .gate-card__input::placeholder {
-  color: var(--color-text-muted);
+  color: rgb(244 242 251 / 0.6);
 }
 
 .gate-card__error {
@@ -113,21 +123,29 @@ async function submit() {
 .gate-card__btn {
   width: 100%;
   padding: 0.5rem 0;
-  background: var(--color-accent);
-  color: var(--color-accent-text);
-  border: none;
-  border-radius: var(--radius-lg);
+  background: var(--glass-bg-control);
+  border: 1px solid var(--glass-border-control);
+  border-radius: var(--glass-radius-control);
+  -webkit-backdrop-filter: blur(var(--glass-blur-control));
+  backdrop-filter: blur(var(--glass-blur-control));
+  color: #fff;
   font-size: var(--text-sm);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   transition:
     background var(--duration-fast) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
 }
 
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .gate-card__btn {
+    background: var(--color-surface-secondary);
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
   .gate-card__btn:hover {
-    background: var(--color-accent-hover);
+    background: var(--glass-bg-control-hover);
     transform: translateY(-1px);
   }
 }

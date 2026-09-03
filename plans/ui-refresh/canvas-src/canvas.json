@@ -1,0 +1,20 @@
+{
+  "pages": [
+    { "id": "liquid-glass", "name": "液体玻璃（选定）" },
+    { "id": "alternates", "name": "备选（未选中）" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",                "title": "液体玻璃 · 首页", "page": "liquid-glass", "x": 0,   "y": 0,    "w": 390, "h": 900 },
+    { "file": "DirectionB-Settings.dc.html", "title": "液体玻璃 · 设置", "page": "liquid-glass", "x": 470, "y": 0,    "w": 390, "h": 900 },
+
+    { "file": "DirectionA-Home.dc.html",     "title": "A · 精修深色 · 首页",   "page": "alternates", "x": 0,   "y": 0,    "w": 390, "h": 900 },
+    { "file": "DirectionA-Settings.dc.html", "title": "A · 精修深色 · 设置",   "page": "alternates", "x": 470, "y": 0,    "w": 390, "h": 900 },
+    { "file": "DirectionC-Home.dc.html",     "title": "C · 亮色习惯追踪 · 首页", "page": "alternates", "x": 0,   "y": 1020, "w": 390, "h": 900 },
+    { "file": "DirectionC-Settings.dc.html", "title": "C · 亮色习惯追踪 · 设置", "page": "alternates", "x": 470, "y": 1020, "w": 390, "h": 900 }
+  ],
+  "annotations": [
+    { "id": "chosen", "page": "liquid-glass", "x": 0, "y": -150, "w": 860, "text": "选定方向：B 液体玻璃。磨砂半透明面板 + 模糊 + 杯子颜色向外晕染，导航条浮起。落地硬约束：杯子 wave rotate 灌水动效不变、桌面网格不加 max-width、reduced-motion 策略不变。落地风险：backdrop-filter 手机端性能（只在卡片/导航/弹窗上用，杯子只保留晕染不加模糊，配 @supports 回退）；浅色文字在渐变网格上的 AA 对比；BottomNav 由通栏改浮起需保住 z-50/弹窗 z-[51] 层级与 safe-area inset。" },
+    { "id": "alt-note", "page": "alternates", "x": 0, "y": -110, "w": 860, "text": "未选中的 A / C，留档备查。" }
+  ],
+  "launch": { "view": "canvas", "page": "liquid-glass" }
+}

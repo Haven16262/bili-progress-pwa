@@ -146,7 +146,7 @@ async function addOne(item) {
   background: rgb(0 0 0 / 0.6);
 }
 
-/* ---- Sheet ---- */
+/* ---- Sheet — glass ---- */
 .add-modal-sheet {
   position: relative;
   width: 100%;
@@ -154,12 +154,20 @@ async function addOne(item) {
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-2xl);
-  box-shadow: 0 16px 48px rgb(0 0 0 / 0.5);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  box-shadow: var(--glass-shadow), 0 16px 48px rgb(0 0 0 / 0.5);
   animation: scale-in var(--duration-normal) var(--ease-out) forwards;
   overflow: hidden;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .add-modal-sheet {
+    background: var(--color-surface-elevated);
+  }
 }
 
 /* ---- Handle (mobile drag indicator) ---- */
@@ -231,9 +239,9 @@ async function addOne(item) {
 .add-modal-error__retry {
   margin-top: 0.75rem;
   padding: 0.5rem 1rem;
-  background: var(--color-surface-secondary);
-  border: none;
-  border-radius: var(--radius-lg);
+  background: rgb(255 255 255 / 0.06);
+  border: 1px solid rgb(255 255 255 / 0.10);
+  border-radius: var(--glass-radius-control);
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -241,7 +249,7 @@ async function addOne(item) {
 }
 
 .add-modal-error__retry:hover {
-  background: var(--color-surface-hover);
+  background: rgb(255 255 255 / 0.10);
 }
 
 .add-modal-error__retry:active {
@@ -292,7 +300,7 @@ async function addOne(item) {
 }
 
 .add-modal-item:hover {
-  background: rgb(255 255 255 / 0.03);
+  background: rgb(255 255 255 / 0.06);
 }
 
 .add-modal-item:focus-visible {
@@ -302,7 +310,7 @@ async function addOne(item) {
 
 .add-modal-item:active {
   transform: scale(0.98);
-  background: rgb(255 255 255 / 0.05);
+  background: rgb(255 255 255 / 0.08);
 }
 
 .add-modal-item:last-child {

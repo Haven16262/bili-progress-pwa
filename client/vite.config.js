@@ -11,8 +11,8 @@ export default defineConfig({
         name: 'Bili Progress',
         short_name: 'BiliProgress',
         description: 'Bilibili 观看进度 3D 可视化',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#10101c',
+        background_color: '#10101c',
         display: 'standalone',
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
