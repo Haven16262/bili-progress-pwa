@@ -9,14 +9,20 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** Phase「动画品味改进轮」已关闭（2026-07-12，commit 见本 Phase 历史关闭总结）。当前无进行中 Phase，等待用户开启下一轮
-**当前任务:** 无。将来项：M4 完整版（独立 SESSDATA_ENC_KEY + 迁移，全局者实现域）
-**关键依据文档:** 本轮产出归档于 `plans/`（8 份自包含计划，状态全 DONE）+ `context_history.md`「Phase：动画品味改进轮」段
-**任务清单(给工作者):** 空
-**下次开 Phase 顺手项（2026-07-12 全局者查证，非紧急）:** 清掉 2 个 Dependabot 告警，均为传递依赖、实际暴露面极小：
-- qs（medium，GHSA-q8mj-m7cp-5q26）：express/body-parser 精确锁版带入 6.14.2/6.15.1，`npm update` 带不动——在 `server/package.json` 加 `"overrides": { "qs": "^6.15.2" }` 后 `npm install`。漏洞点在 `qs.stringify` 特定选项组合，服务端无此调用路径，仅为归零告警
-- @babel/core（low，GHSA-4x5r-pxfx-6jf8）：`cd client && npm update @babel/core` 升到 ≥7.29.6（workbox-build 是 ^7 范围，可直升）。纯构建期工具链，产物不含 babel
-- 完成标准：`gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts` 无 open 告警。**注意：server 动了 node_modules，按跨 Phase 测试封闭性约定跑干净环境测试，重启走 start.sh（ABI 自愈）**
+**阶段:** 无进行中 Phase。上一 Phase「视觉语言翻新 — 液体玻璃」已关闭（2026-09-03，commit `a1a4a93` + 归档 commit，已 push origin/master）。等待用户开启下一轮。
+**当前任务:** 无。
+**关键依据文档:** 上一 Phase 完整交互原文已归档 `context_history.md`「Phase：视觉语言翻新 — 液体玻璃（2026-09-03）」段（含 token 规格 + 5 项风险决策 + T1–T10 逐条）。视觉稿 Artifact `https://claude.ai/code/artifact/2da1c9e3-223d-4ba4-98df-8edb22efc2ea`（源 `plans/ui-refresh/canvas-src/`）。
+
+**任务清单(给工作者):** 空。
+
+**backlog（下次开 Phase 顺手项，非紧急）:**
+- **真机性能确认**：液体玻璃的 `backdrop-filter` 只在 headless 4× throttle 下测过（43-50fps，A/B 证明掉帧源是既有 wave 动画、玻璃化增量 <3fps）。请用户在自己手机上滚一次首页确认无卡顿——若卡，第一手段是降 `--glass-blur*` 或减少同屏玻璃层。
+- **`@supports` 玻璃回退块 DRY**：现在各组件 scoped 样式里复制了约 12 份 `@supports not (backdrop-filter...)` → 不透明 surface 的回退。`main.css` 的 `.glass-panel` / `.glass-control` 工具类没真正统一（组件多为内联样式）。可收敛。
+- **`styleSrc 'unsafe-inline'`**（既有弱点，非液体玻璃轮引入，自 2026-04-30 commit e69e3c0）：移除需给 Vue scoped 样式 + 内联 `style=` 绑定上 nonce/hash 方案。
+- 清掉 2 个 Dependabot 告警（qs medium / @babel/core low，均传递依赖、暴露面极小）：`server/package.json` 加 `"overrides": { "qs": "^6.15.2" }` 后 `npm install`；`cd client && npm update @babel/core` 升 ≥7.29.6。完成标准 `gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts` 无 open。server 动 node_modules 后按测试封闭性约定跑干净环境测试、重启走 start.sh。
+- M4 完整版（独立 `SESSDATA_ENC_KEY` + 迁移，全局者实现域）—— 跨多个 Phase 未启动的旧将来项。
+
+**未验证的前提:** 无进行中任务。
 
 ---
 
@@ -33,7 +39,8 @@
 - **归档 = 永久软隐藏，非删除**：`archived=1` 只从首页列表隐藏，记录永久保留在数据库，没有自动删除机制，也不新增（用户已确认维持现状）
 - **归档倒计时按日历日计**：「进度 100% 持续 3 天归档」中的一天 = 一个日历日，同日多次同步不重复计数（2026-07-04 架构评审 H1 决策，本 Phase 实现）
 - **B站 请求节制**：历史翻页必须有提前终止 + 页数上限 + 页间延时，防触发风控（2026-07-04 架构评审 H2 决策）
-- **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出
+- **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出。**「视觉语言翻新」轮（2026-09-03）确认：只换杯壁材质/配色，wave rotate 动画本身不动。**
+- **当前视觉语言 = 液体玻璃（2026-09-03 起，用户经 /design 三方案选定，取代旧「深色仪表盘」）**：token 全在 `client/src/assets/styles/main.css` 的 `:root`（`--glass-*` 面板/导航/按钮、`--bg-blob-*` 背景网格、`--liquid-*-bloom` 杯子晕染、`--font-display`=Manrope、`--color-text-on-glass`），`tailwind.config.js` 同步。硬约束（后续轮沿用）：① `backdrop-filter` blur ≤20px、只用在卡片/面板/导航/弹窗/按钮，**杯子只用 radial 晕染不加 backdrop-filter**，每处必须配 `@supports not (backdrop-filter...)` 回退到不透明 `--color-surface`（`#1d1d31`）；② `--color-accent`（纯青）保留用于 `focus-visible` outline / nav-active / slider / 语义反馈——focus 可见性是 a11y 硬要求，不因玻璃美学丢；③ BottomNav 是浮起玻璃胶囊（`fixed` + `left/right:16px` + `bottom:18px`，桌面 `@media(min-width:769px)` 加 `max-width:420px`+`margin-inline:auto`），底部留白由 `App.vue` 的 `main` 统一（`pb-[calc(6.5rem+env(safe-area-inset-bottom))]`），两页面自身不再设 `padding-bottom`；④ 正文文字须过 WCAG AA（判定用声明色静态模型，渲染像素实测有抗锯齿稀释偏差）。Google Fonts 两域已在 `server/src/index.js` helmet CSP 放行（style-src fonts.googleapis.com / font-src fonts.gstatic.com）。
 - **B站 图片必须 CORS 加载（2026-07-07 M2 教训）**：Chrome ORB 会拦截跨域 no-cors `<img>`（ERR_BLOCKED_BY_ORB，且报错只在网络层，DOM 只见裂图）。任何加载 B站 封面（`*.hdslb.com`/`*.bilibili.com`）的 `<img>` 都必须带 `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`；CSP imgSrc 已含两域。首次误判为 CSP 问题，排查靠 Playwright 监听网络层
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **测试封闭性（2026-07-07 教训）**：测试必须在干净 shell 里可复现，不得依赖会话环境变量——工作者曾报「29 例全绿」实为其 shell 恰好导出了 JWT_SECRET，干净环境下新用例全被跳过。所需变量一律在 `server/vitest.config.js` 的 `test.env` 注入（现有 `TEST_DB=':memory:'` + 测试专用 JWT_SECRET）；**数据库隔离靠 TEST_DB，`NODE_ENV=test` 不隔离任何东西**。交接报测试结果前先在干净环境跑一遍
@@ -46,42 +53,16 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-07-12 16:15] 工作者 — R1 修复 + R2 运行时验证全绿
+## [2026-09-03 15:40] 全局者 — Phase「视觉语言翻新 — 液体玻璃」关闭
 
-**完成情况：**
-- **R1**：main.css reduced-motion 块追加 `animation-delay: 0.01ms !important`，构建通过。
-- **R2**：用 Playwright（Chromium headless）对 001–007 逐一跑运行时验证，19 项全部通过：
+**交付汇总：** T1–T10 全部落地。11 前端文件 + `server/src/index.js`（helmet CSP 放行 Google Fonts 两域）+ `index.html`/`vite.config.js`（theme-color / manifest bg → `#10101c`）。commit `a1a4a93`（feat，34 文件 1513+/216−，含 `plans/ui-refresh/` 设计源 + 3 验证脚本 + 10 断点截图；2MB `/design` seed payload `bili-pwa-visual-refresh.html` 因触发全局 pre-commit 机密扫描超时，加进 `.gitignore` 未入库，可由 `.dc.html` 源重生）。本条 docs commit 归档。已 push origin/master。
 
-| 计划 | 验证项 | 结果 |
-|------|--------|------|
-| 001 | hover 规则全部在 @media(hover:hover) 内，无裸 :hover transform | ✅ |
-| 002 | 模态 scale-in 入场 / close 后 v-if 移除 / rapid toggle 重开成功 | ✅ |
-| 003 | RM 块存在 / transition-property 白名单生效（非 duration 全灭） | ✅ |
-| R1 | RM 块 animation-delay: 0.01ms 已生效 | ✅ |
-| 004 | liquid-fill 使用 translateY transform（matrix 含 translate），transition 属性为 transform 非 height | ✅ |
-| 005 | nav-icon 有 transform transition；add-modal-item transition 含 transform | ✅ |
-| 006 | 首载后 liquid-fill transform 非 identity（注水已执行）；progress text 94%（count-up 完成） | ✅ |
-| 007 | stagger delays 正确递进（0s→0.04s→0.08s…）/ RM 下 8 个圆柱 opacity 全为 1 立即可见（R1 修复确认生效）/ 动画中可点击 | ✅ |
+**审查轨迹：** 安全预检命中（50 处，噪音为主；真安全面只有 CSP 两行）+ 工作者「安全相关」非空 → invoke `critic`。critic：CSP 为「加 Google Fonts」最小必要改动，无其他 directive 放宽、无 `unsafe-eval`/通配符、无内联脚本、无 XSS 向量、`plans/` 无真实凭据；唯一存疑 `styleSrc 'unsafe-inline'` 经全局者 `git log -S"'unsafe-inline'"` 复核确认系 commit e69e3c0（2026-04-30）既有、非本轮引入。功能面全局者独立抽查：T2 wave 五件套零 `+/-`、T5 nav z-50/弹窗 z-51 契约 + safe-area + h-screen 滚动、T7 结构（杯子无 backdrop-filter / blur ≤20px / 无 will-change / `@supports` 回退）、T8 `#10101c` 三处落地、build 绿 —— 全过。T10（桌面导航 `max-width:420px` 居中）单独复核几何 + 手机端像素零差异，通过。
 
-**关键发现：**
-- R1 修复前 RM stagger delays 为 `calc(var(--stagger)*40ms)`（最长 400ms），修复后压为 `1e-05s`（0.01ms），圆柱全部立即可见。
-- 第一次 RM 测试中 opacity 误报为 0 系测试脚本未等待数据加载完毕，修正后通过。
-- `@click.self` 在 `.modal-overlay` 上，Playwright 需通过"取消"按钮或 overlay 边距区域触发关闭。
+**偏离裁定：** 对比度驱动 4 处 token 微调 / 留白收敛到 `main` / slider 保留原生 accent-color —— 接受。桌面导航全宽 —— 用户看 1440 截图后拍板改限宽居中（落为 T10）。
 
-**任务进度：**
-- [x] R1 reduced-motion 块补 animation-delay
-- [x] R2 运行时验证（19/19 全绿）
-- [x] 001–008 全部实现 + 修复 + 验证完成
+**新增跨 Phase 约定：** 「当前视觉语言 = 液体玻璃」条（见上「跨 Phase 关键约定」，含 token 位置 + blur 预算 + `@supports` 回退 + accent 青保留 focus 可见性 + 浮起导航契约 + AA 判定方式）。
 
-**关键决策点：**
-- 架构/接口变动：无
-- 安全相关：无
-- 偏离原计划：无
-- 未解决的疑虑：无
+**backlog（滚动，见「当前状态」）：** 真机性能确认 / `@supports` 回退块 DRY / `styleSrc 'unsafe-inline'` 移除需 nonce / 2 个 Dependabot 告警 / M4 完整版。
 
-## [2026-07-12 16:30] 全局者 — Phase「动画品味改进轮」关闭
-
-**交付汇总：** 8 份计划（001–008）全部落地 + 复审打回的 R1 修复 + Playwright 运行时验证 19/19 全绿。改动纯前端 6 文件：hover 触屏门控（001）、RM 去位移留反馈（003+R1）、双模态退场（002）、液面 height→transform（004）、按压反馈（005）、首载注水+count-up（006）、网格入场 stagger（007）、删 --ease-spring（008）。
-**审查轨迹：** 安全预检两轮零命中，未触发 critic。全局者抽查三处风险面（007 隐形风险/004 溢出裁剪/006 rAF 泄漏）均安全；打回 1 缺陷（RM 块漏压 animation-delay）+ 1 纪律项（8 条交接零运行时验证报告），二者均闭环。001 偏离（独立 media 块）接受。
-**新增跨 Phase 约定：** reduced-motion 策略定版（duration+delay 必须同压 + transition-property 白名单）。
-**backlog：** 空。唯一将来项 M4 完整版（独立 ENC_KEY，全局者实现域）。前段历史已归档 `context_history.md`。
+**完整逐轮交互（Phase 开启 spec + T1–T9 交接 + 复审 + T10 交接）已归档 `context_history.md`「Phase：视觉语言翻新 — 液体玻璃（2026-09-03）」段。**

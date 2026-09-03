@@ -807,3 +807,144 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 3. 验证全绿后交回全局者，走 commit + Phase 关闭归档。
 
 **移交工作者：** 按「当前状态」R1→R2 执行。
+
+## [2026-07-12 16:15] 工作者 — R1 修复 + R2 运行时验证全绿
+
+**完成情况：**
+- **R1**：main.css reduced-motion 块追加 `animation-delay: 0.01ms !important`，构建通过。
+- **R2**：用 Playwright（Chromium headless）对 001–007 逐一跑运行时验证，19 项全部通过：
+
+| 计划 | 验证项 | 结果 |
+|------|--------|------|
+| 001 | hover 规则全部在 @media(hover:hover) 内，无裸 :hover transform | ✅ |
+| 002 | 模态 scale-in 入场 / close 后 v-if 移除 / rapid toggle 重开成功 | ✅ |
+| 003 | RM 块存在 / transition-property 白名单生效（非 duration 全灭） | ✅ |
+| R1 | RM 块 animation-delay: 0.01ms 已生效 | ✅ |
+| 004 | liquid-fill 使用 translateY transform（matrix 含 translate），transition 属性为 transform 非 height | ✅ |
+| 005 | nav-icon 有 transform transition；add-modal-item transition 含 transform | ✅ |
+| 006 | 首载后 liquid-fill transform 非 identity（注水已执行）；progress text 94%（count-up 完成） | ✅ |
+| 007 | stagger delays 正确递进（0s→0.04s→0.08s…）/ RM 下 8 个圆柱 opacity 全为 1 立即可见（R1 修复确认生效）/ 动画中可点击 | ✅ |
+
+**关键发现：**
+- R1 修复前 RM stagger delays 为 `calc(var(--stagger)*40ms)`（最长 400ms），修复后压为 `1e-05s`（0.01ms），圆柱全部立即可见。
+- 第一次 RM 测试中 opacity 误报为 0 系测试脚本未等待数据加载完毕，修正后通过。
+- `@click.self` 在 `.modal-overlay` 上，Playwright 需通过"取消"按钮或 overlay 边距区域触发关闭。
+
+**任务进度：**
+- [x] R1 reduced-motion 块补 animation-delay
+- [x] R2 运行时验证（19/19 全绿）
+- [x] 001–008 全部实现 + 修复 + 验证完成
+
+**关键决策点：**
+- 架构/接口变动：无
+- 安全相关：无
+- 偏离原计划：无
+- 未解决的疑虑：无
+
+## [2026-07-12 16:30] 全局者 — Phase「动画品味改进轮」关闭
+
+**交付汇总：** 8 份计划（001–008）全部落地 + 复审打回的 R1 修复 + Playwright 运行时验证 19/19 全绿。改动纯前端 6 文件：hover 触屏门控（001）、RM 去位移留反馈（003+R1）、双模态退场（002）、液面 height→transform（004）、按压反馈（005）、首载注水+count-up（006）、网格入场 stagger（007）、删 --ease-spring（008）。
+**审查轨迹：** 安全预检两轮零命中，未触发 critic。全局者抽查三处风险面（007 隐形风险/004 溢出裁剪/006 rAF 泄漏）均安全；打回 1 缺陷（RM 块漏压 animation-delay）+ 1 纪律项（8 条交接零运行时验证报告），二者均闭环。001 偏离（独立 media 块）接受。
+**新增跨 Phase 约定：** reduced-motion 策略定版（duration+delay 必须同压 + transition-property 白名单）。
+**backlog：** 空。唯一将来项 M4 完整版（独立 ENC_KEY，全局者实现域）。前段历史已归档 `context_history.md`。
+
+# Phase：视觉语言翻新 — 液体玻璃（2026-09-03）
+
+## [2026-09-03 10:20] 全局者 — Phase「视觉语言翻新 — 液体玻璃」开启
+
+**背景：** 用户要翻新 bili PWA 的 UI，理由是「整体感觉过时」，范围选「换视觉语言」（可推翻现有深色仪表盘语言）。全局者用 `/design` 出了三方向中保真草稿（A 精修深色 / B 液体玻璃 / C 亮色习惯追踪）各首页+设置两屏，用户选定 **B 液体玻璃**。不用 opus（设计品味活，非深推理）；实现由工作者做，全局者规划 + 审查，本轮无强制升级项（不涉及认证/密钥/支付/并发/迁移/API 契约）。
+
+**决策 —— 液体玻璃 token 规格（工作者以视觉稿为准，这里给数值锚点）：**
+- **页面背景**：`#10101c` 打底，叠三层 radial-gradient 网格：
+  `radial-gradient(120% 80% at 12% 0%, rgba(129,90,240,0.42), transparent 55%)`,
+  `radial-gradient(120% 90% at 92% 12%, rgba(56,120,230,0.36), transparent 52%)`,
+  `radial-gradient(140% 100% at 60% 100%, rgba(168,85,247,0.30), transparent 55%)`
+- **玻璃面板（卡片/弹窗）**：`background: rgba(255,255,255,0.07)`；`border: 1px solid rgba(255,255,255,0.14)`；`backdrop-filter: blur(18px)`；`box-shadow: 0 10px 30px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)`；`border-radius: 24px`
+- **浮起玻璃导航条**：`left/right: 16px; bottom: 18px`；`rgba(255,255,255,0.10)`；`border 1px rgba(255,255,255,0.16)`；`blur(20px)`；radius 22px；`box-shadow: 0 12px 32px rgba(0,0,0,0.3)`
+- **文字**：primary `#f4f2fb`；secondary `rgba(244,242,251,0.6)`；muted `rgba(244,242,251,0.4)`
+- **主操作按钮（+、保存、立即同步）**：玻璃白 `rgba(255,255,255,0.14~0.16)` + `border 1px rgba(255,255,255,0.25)` + blur，**不再是纯青实心**
+- **杯子晕染**：每杯背后一枚 radial-gradient 光晕，颜色取该杯液色约 0.5 alpha，`filter: blur(6px)`，约 130px 圆、居中偏上 40%
+- **液体 4 级渐变**（<30 cyan / 30-59 blue / 60-89 violet / 90+ purple）是进度语义，**分级不改**，只把色停调向略亮半透明（rgba ~0.95）
+- **字体**：标题/数字 `Manrope`（Google Fonts，`<link>` 到 fonts.googleapis.com；CSP 已允许该域，须核对 `client/index.html` 的 CSP style-src/font-src）；正文 system-ui；中文 fallback 系统 CJK
+
+**决策 —— 5 项落地风险（工作者遇到冲突按此判，不自行改方向）：**
+1. **backdrop-filter 性能**：允许用，但 blur 只加在卡片/面板/导航/弹窗，**不加在每个杯子**（杯子只用便宜的 radial 晕染）；必须配 `@supports` 回退到不透明 `--color-surface`；交接前必须在 4 断点 Playwright + CPU throttle 实测滚动，见 T7。
+2. **BottomNav 布局变更**：通栏 → 浮起 inset。必须保住 z-50/弹窗 z-[51] 层级契约、`safe-area-inset-bottom`（改成 margin）、`App.vue` h-screen + main overflow-auto 滚动，见 T5 完成标准。
+3. **accent token 语义分裂**：`--color-accent` 现在纯青，用于 +按钮/主按钮/focus ring/nav active/slider。液体玻璃下主按钮改玻璃白，**但 `focus-visible` outline、nav-active 色、语义反馈色仍保留一个高对比青**——focus 可见性是 a11y 硬要求，不能因为好看丢掉。
+4. **对比度**：浅色文字叠半透明面板 + 忙碌渐变网格，正文必须过 WCAG AA；渐变网格在文字区域要够暗，见 T8。
+5. **稿件像素值**：全局者手写草稿、非量取，作方向依据；落地以现有组件间距节奏为准微调。
+
+**审查方式（本 Phase）：** 工作者按 T1–T9 交付后，全局者跑 `bash ~/.claude/scripts/security-scan.sh <上次 commit>` + 核对「关键决策点」四项。UI 轮预期零安全命中；若命中或「安全相关」非空则 invoke `critic`。重点抽查：T7 性能实测是否真跑过（不是自报「应该没问题」）、T5 的三条 BottomNav 完成标准、T2 wave 动画确未被动。
+
+**移交工作者：** 按「当前状态」T1–T9 顺序执行；T5、T7 是关键项，遇到层级/性能上的取舍立即切回全局者，不硬猜。
+
+## [2026-09-03 13:40] 工作者 — T1–T9 液体玻璃实现完成，交接复审
+
+**完成情况：** 9 项任务全部完成，未提交（待全局者复审）。`cd client && npm run build` 通过（118.5kB JS / 38.6kB CSS）。5 断点×2 页 Playwright 截图无横向溢出。对比度声明色模型 25/26 组合 PASS（唯一 FAIL 组合已从 UI 消灭）。wave 动画五件套 git diff 逐字零改动。验证脚本与截图留在 `plans/ui-refresh/`（未提交，供复审重跑）：`verify-t7.mjs`、`check-contrast.mjs`、`measure-rendered-contrast.mjs`、`screenshots/`。
+
+**任务进度：**
+- [x] T1 — main.css `:root` 整体替换为液体玻璃 palette（含 `--glass-*`、`--bg-blob-*`、`--liquid-*-bloom`、`--font-display`、`--color-text-on-glass`）；body 用 3 层 radial-gradient + `#10101c`（html/body overflow:hidden + main 内部滚动 → 背景天然静止，无需 background-attachment）；tailwind.config.js 同步；index.html 加 Manrope `<link>`（600/700/800 + display=swap + preconnect）；新增 global 工具类 `.glass-panel` / `.glass-control` 作为 backdrop-filter 唯一来源。
+- [x] T2 — 杯壁改半透明白渐变 + `border: 1px rgba(255,255,255,0.3)` + 稿件圆角 4/4/26/26；rim 同步改白透；`.cup-bloom` 按 130px / 顶部 40% / blur(6px) / 液色 ~0.5 alpha 实现（新增 4 个 bloom token）；数字 Manrope 700 + clamp(12px,16%,18px)。wave 五件套零改动（grep diff 验证）。
+- [x] T3 — 标题 Manrope 800 26px/-0.02em；+ 按钮 42px 玻璃白（bg 0.14+、border 0.25、blur 14px、radius 16px）；banner 红色晕玻璃；空态按钮玻璃白；编辑名弹窗改玻璃 sheet。桌面 gridTemplateColumns 逻辑、mobile 横向滚动 DOM、--stagger 均未动；无 max-width。
+- [x] T4 — 卡片→玻璃面板（radius 24px、padding 18px）；badge 改药丸（999px + 描边 + 晕色底）；输入框白 0.06 底 + 0.16 描边 + 14px 圆角；主按钮玻璃白、次按钮白 0.06；slider 保持原生 range + accent-color 青（手写 track 有 webkit/moz 分叉，稿件为草稿）。
+- [x] T5 — 浮起玻璃条（inset 16/18px、blur 20px、radius 22px、`--glass-shadow-nav`）。三条完成标准实测通过：① 弹窗遮罩 z-51 盖住 z-50 导航（elementFromPoint 命中 overlay）；② safe-area 改 `margin-bottom` 应用；③ App.vue main 改 `pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]`，两页面原 `padding-bottom: 5rem` 移除，滚动正常。
+- [x] T6 — AddVideoModal sheet 玻璃化（列表行 hover 白 0.06）、PasswordGate 卡片玻璃化 + 标题 Manrope 800。
+- [x] T7 — 结构检查：backdrop-filter 仅存在于面板/导航/弹窗/按钮（Cylinder3D 里只有注释）；blur 全部 ≤20px（18/20/14 三档）；无 will-change；全部配 @supports 回退到不透明 surface。5 断点无横向溢出 ✓。性能实测（Chrome headless 4× CPU throttle，375×667，40 杯，4s 正弦扫滚，3 轮）：**43-50fps**（随系统负载波动，p95≈33ms）。A/B 归因：停 wave 动画 → 60.3fps（掉帧源是既有 wave 连续重绘）；去 nav blur → +2.7fps；去 bloom filter → ±0。即本轮玻璃化增量成本 <3fps、bloom 零成本。
+- [x] T8 — 声明色层叠模型（WCAG 正式定义）25/26 PASS，唯一 FAIL 是「muted 0.5 叠玻璃面板叠底部晕染」组合，已通过把面板内所有小字改用新 token `--color-text-on-glass`(0.68) 消灭；配套调整：`--color-text-muted` 0.4→0.5（AA 下限）、placeholder 0.6、badge 成功文字 `#86efac`（green-400 实测仅 3.4:1）。渲染像素实测（文字框 99% 分位 + 背景补丁中位数）作为旁证：desc 5.19 / hint 6.05 / badge-muted 4.77 / nav 未激活 6.71 / placeholder 5.84 均过。theme-color 与 manifest background_color 已改 `#10101c`。
+- [x] T9 — RM 块未动（duration+delay 双压 0.01ms + 白名单过渡不变）；本轮未新增任何 animation/keyframes/opacity:0+delay 入场动画；cup bloom 为静态元素，RM 安全。
+
+**关键决策点：**
+- 架构/接口变动：无接口变动。新增 token 与工具类如上；`--color-accent` 按决策 3 保留纯青用于 focus ring/nav-active/slider/语义反馈，主按钮全部走玻璃白。
+- 安全相关：**改动了 `server/src/index.js` 的 helmet CSP**——styleSrc 加 `https://fonts.googleapis.com`、fontSrc 加 `https://fonts.gstatic.com`。原因：全局者决策「CSP 已允许该域」的前提与实际不符（CSP 在 server 侧而非 client/index.html，且两域此前均未放行）；不放行则 Manrope 在生产环境被 CSP 静默拦截。属执行既定决策（Manrope）的必要配套，请全局者复审此放行。
+- 偏离原计划：① 对比度驱动的 4 处数值偏离决策锚点（muted 0.4→0.5、面板小字 0.68、placeholder 0.6、badge 绿字 #86efac），均由 T8 的 WCAG AA 硬要求触发，逐一实测记录；② 两页面 `padding-bottom: 5rem` 移除、改由 main 统一留白（浮起导航的底部遮挡计算变了）；③ 设置页 slider 未按稿件手写渐变 track，保留原生 accent-color（跨浏览器稳定，稿件为草稿）；④ 桌面宽屏下导航条仍 16px inset 浮起（稿件仅手机版），1440px 下呈全宽浮起条。
+- 未解决的疑虑：① T7「不掉帧」严格意义上未达成——4× throttle 软件渲染下 43-50fps，但 A/B 证明掉帧源是用户定版的 wave 动画（既有成本），本轮玻璃化增量 <3fps；真机未验证（用户手机型号未知），建议全局者决定是否要求用户在真机滚动确认一次；② 渲染像素对比度实测法存在抗锯齿稀释偏差（细字实测比声明色模型低约 0.8），正式判定以声明色静态模型为准，方法学已在 `check-contrast.mjs` / `measure-rendered-contrast.mjs` 注释中说明。
+
+## [2026-09-03 14:30] 全局者 — T1–T9 复审通过 + critic 安全审查 + T10 追加
+
+**背景：** 工作者交付 T1–T9（未提交）。安全预检脚本命中（50 处，噪音居多——「token」字样、`plans/` 下 2MB design payload、验证脚本里的 `localhost`/假 token；真安全面只有 `server/src/index.js` CSP 两行）；工作者「安全相关」项非空。二者任一即触发 critic，已 invoke。
+
+**审查轨迹：**
+- **critic（Read/Grep/Glob 只读）**结论：CSP 改动是「加 Google Fonts」的最小必要改动，其余 directive 未动、无 `unsafe-eval`/通配符；index.html 只连两 Google 域、`crossorigin` 用对、无内联脚本；PasswordGate/SettingsPage 认证与 SESSDATA 逻辑未碰、无 XSS 向量；`plans/` 无硬编码真实凭据。唯一存疑：`styleSrc` 的 `'unsafe-inline'` 是否本轮引入。
+- **全局者独立复核该疑点：** `git show HEAD:server/src/index.js` + `git log -S"'unsafe-inline'"` 确认——`'unsafe-inline'` 自 **commit e69e3c0（2026-04-30「安全加固」）** 起就在 `styleSrc`，本轮仅追加 `https://fonts.googleapis.com` 一条。critic 的「情景 A」成立。
+- **全局者功能面抽查（独立跑）：** T2 wave 五件套 `git diff` 逐行零 `+/-`（改的是杯壁材质/rim/数字字体，动画未碰）✓；T5 nav `z-index:50` 保留、`.modal-overlay`/AddVideoModal `z-index:51` 保留、`App.vue` `h-screen`+`overflow-auto` 保留、safe-area 正确改 `margin-bottom`、两页 `padding-bottom:5rem` 收敛到 `main` ✓；T7 结构 Cylinder3D 无 backdrop-filter、blur 全 ≤20px、无 `will-change`、每处配 `@supports` 回退 ✓；T8 `#10101c` 已落 index.html+vite.config+构建 manifest ✓；`npm run build` 绿（118.5kB JS / 38.6kB CSS，在预算内）✓。
+
+**决策：**
+1. **T1–T9 放行。** 安全面干净，功能面抽查全过。
+2. **偏离项裁定：** ①（对比度 token 微调）②（留白收敛 main）③（slider 保留原生）—— 三项接受（分别是 AA 硬要求、更 DRY、稿件本为草稿）。④（桌面导航全宽）—— 用户看 1440 截图后拍板：**改为限宽居中**，落为 T10。
+3. **`plans/ui-refresh/` 提交**（用户拍板全提交；实际落地时 2MB seed payload `bili-pwa-visual-refresh.html` 因触发 pre-commit 机密扫描超时，加进 `.gitignore` 未入库，其余 `.dc.html` 源 + `canvas.json` + 截图 + 验证脚本入库；payload 可由 `.dc.html` 经 seed 脚本重生）。
+4. **非阻塞后续（记入 backlog，不在本 Phase 做）：**
+   - `@supports` 玻璃回退块在各组件 scoped 样式里复制约 12 份，main.css「唯一 backdrop-filter 来源」注释名不副实——可后续 DRY。
+   - `styleSrc` 的 `'unsafe-inline'` 是既有弱点（Vue scoped 样式 + 大量内联 `style=` 绑定导致，移除需 nonce/hash 方案）——本轮无关，登记为待办。
+
+**移交工作者：** 只做 T10（桌面导航限宽居中，spec 见「当前状态」）。做完交回全局者做最终 diff 复核 + 一次性 commit 整个 Phase + 关闭归档。
+
+## [2026-09-03 15:10] 工作者 — T10 桌面导航限宽居中完成
+
+**完成情况：** T10 完成，未提交。改动仅 `client/src/components/BottomNav.vue` 一处：`@supports` 回退块之后追加 `@media (min-width: 769px) { .nav-bar { max-width: 420px; margin-inline: auto; } }`。其余文件零改动（T1–T9 的改动维持原样等最终 commit）。
+
+**任务进度：**
+- [x] T10 — 完成标准逐条验证：
+  1. ≥769px 居中胶囊：Playwright 实测 1024px 视口 nav 宽 420px、left=302（居中偏差 <1px）；1440px 视口 nav 宽 420px、left=510（居中偏差 <1px）✓；宽度 ≤480px ✓
+  2. ≤768px 与改前一致：**A/B 决定性验证**——临时移除 T10 块构建 + 冻结动画（`.wave{animation:none}`）截 768px 图，恢复 T10 构建同条件再截，**逐像素对比差异 = 0**。另注：直接拿动画运行中的截图对比会有 ~30k–135k 像素噪声（wave 相位 + 跨会话渲染），该噪声与 T10 无关（同 build 连拍两张即有 30k 差异）。
+  3. `npm --prefix client run build` 通过（118.5kB JS / 38.6kB CSS）✓
+  4. `home-1024.png` / `home-1440.png` 已重截覆盖 `plans/ui-refresh/screenshots/` ✓
+- 宽度微调：按决策先取 420px。渲染了 360/420/480 三变体导航区对比图，视觉副模型无法做比例美感判断（三张描述完全相同），几何上三档无明显优劣 → **保持 420px**（全局者锚点值）。是否在 360–480 间微调建议由全局者/用户对着 `home-1440.png` 人眼定夺，纯主观项。
+- 新增验证脚本 `plans/ui-refresh/verify-t10.mjs`（几何检查 + 像素对比流程，可复跑）。
+
+**关键决策点：**
+- 架构/接口变动：无。纯 CSS 媒体查询追加，媒体查询边界（769px）与项目设备类型断点（≤768 mobile）一致。
+- 安全相关：无。
+- 偏离原计划：无。420px 未做微调（理由见上，主观判断留给全局者/用户）。
+- 未解决的疑虑：无。`margin-inline: auto` 与 `left/right:16px` 并存时靠 CSS 2.1 §10.3.7 的 margin auto 吸余量居中——已在 1024/1440 实测验证，无需疑虑。`left/right:16px` 锚点保留；媒体查询范围内最小可用宽度 769-32=737px 恒大于 420px，故胶囊在 ≥769px 下恒为 420px 不收缩，锚点实际不绑定（与决策的「作下限保留」一致）。
+
+## [2026-09-03 15:40] 全局者 — Phase「视觉语言翻新 — 液体玻璃」关闭
+
+**交付汇总：** T1–T10 全部落地。改动 11 前端文件 + `server/src/index.js`（CSP 放行 Google Fonts）+ `client/index.html`/`vite.config.js`（theme-color/manifest bg → `#10101c`）。commit `a1a4a93`（feat，34 文件 1513+/216-，含 `plans/ui-refresh/` 设计源+验证脚本+截图；2MB seed payload gitignore 未入库）+ docs commit（本次归档）。已 push origin/master。
+**审查轨迹：** 安全预检命中（噪音为主，真面只有 CSP 两行）+ 工作者「安全相关」非空 → invoke `critic`。critic 结论 CSP 为最小必要改动、无其他 directive 放宽、无 XSS/凭据问题；唯一存疑 `styleSrc 'unsafe-inline'` 经全局者 `git log -S` 复核确认系 2026-04-30 既有、非本轮引入。功能面全局者独立抽查 T2/T5/T7/T8 + build 全过。T10（桌面导航限宽居中）单独复核几何 + 手机端像素零差异，通过。
+**偏离裁定：** 对比度 token 微调 / 留白收敛 main / slider 保留原生 —— 接受。桌面导航全宽 —— 用户拍板改限宽居中（T10）。
+**新增跨 Phase 约定：** 「当前视觉语言 = 液体玻璃」条（token 位置 + blur 预算 + @supports 回退 + accent 青保留 focus 可见性 + 浮起导航契约）。
+**backlog（滚动到下一 Phase）：**
+- `@supports` 玻璃回退块复制 ~12 份可 DRY（`.glass-panel`/`.glass-control` 工具类未真正统一）
+- `styleSrc 'unsafe-inline'` 既有弱点，移除需 nonce/hash 方案
+- **真机性能未验证**：headless 4× throttle 43-50fps，A/B 证明掉帧是既有 wave 动画、玻璃化增量 <3fps；建议用户在自己手机滚一次首页确认
+- M4 完整版（独立 SESSDATA_ENC_KEY + 迁移，全局者实现域）—— 跨多个 Phase 未启动的旧将来项
