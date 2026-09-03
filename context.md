@@ -19,7 +19,7 @@
 - **真机性能确认**：液体玻璃的 `backdrop-filter` 只在 headless 4× throttle 下测过（43-50fps，A/B 证明掉帧源是既有 wave 动画、玻璃化增量 <3fps）。请用户在自己手机上滚一次首页确认无卡顿——若卡，第一手段是降 `--glass-blur*` 或减少同屏玻璃层。
 - **`@supports` 玻璃回退块 DRY**：现在各组件 scoped 样式里复制了约 12 份 `@supports not (backdrop-filter...)` → 不透明 surface 的回退。`main.css` 的 `.glass-panel` / `.glass-control` 工具类没真正统一（组件多为内联样式）。可收敛。
 - **`styleSrc 'unsafe-inline'`**（既有弱点，非液体玻璃轮引入，自 2026-04-30 commit e69e3c0）：移除需给 Vue scoped 样式 + 内联 `style=` 绑定上 nonce/hash 方案。
-- 清掉 2 个 Dependabot 告警（qs medium / @babel/core low，均传递依赖、暴露面极小）：`server/package.json` 加 `"overrides": { "qs": "^6.15.2" }` 后 `npm install`；`cd client && npm update @babel/core` 升 ≥7.29.6。完成标准 `gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts` 无 open。server 动 node_modules 后按测试封闭性约定跑干净环境测试、重启走 start.sh。
+- **Dependabot 告警已涨到 20（11 high / 6 moderate / 3 low，2026-09-03 push 时 GitHub 报的）**——远超 2026-07-12 评估的 2 个（qs / @babel/core）。下次开 Phase 前先 `gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts` 拉全量重新分诊，别再沿用旧的「只有 2 个、暴露面极小」判断。server 动 node_modules 后按测试封闭性约定跑干净环境测试、重启走 start.sh。
 - M4 完整版（独立 `SESSDATA_ENC_KEY` + 迁移，全局者实现域）—— 跨多个 Phase 未启动的旧将来项。
 
 **未验证的前提:** 无进行中任务。
