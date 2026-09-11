@@ -9,7 +9,7 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。插入任务「每日同步 412 冻结」：**已修复 + 审查通过放行**（2026-09-11；实现 commit `155f420`；审查记录见「本 Phase 历史」[2026-09-11 04:46] 条）。**发布待执行**：本会话与工作者会话的 `git push` 均被守卫拦截（无放行通道），由用户敲 `! git push origin master` 完成。上一 Phase「视觉语言翻新 — 液体玻璃」已关闭（2026-09-03，commit `a1a4a93`，已 push origin/master）。
+**阶段:** 无进行中 Phase。插入任务「每日同步 412 冻结」：**已修复 + 审查通过放行**（2026-09-11；实现 commit `155f420`；审查记录见「本 Phase 历史」[2026-09-11 04:46] 条）。**已发布**（2026-09-11）：用户 `! git push origin master` 完成，origin/master = `dd79baa`（含修复 `155f420` + 两条 docs）。上一 Phase「视觉语言翻新 — 液体玻璃」已关闭（2026-09-03，commit `a1a4a93`，已 push origin/master）。
 **当前任务:** 无。唯一待观察项：**9/12 03:07 cron 首次自动同步** —— 下一轮 session 先查 `sync_log`（预期 success；见「未验证的前提」）。
 **根因（已实证）:** B站 `/x/web-interface/view` 对本服务 UA（Chrome/125 型）返回 HTTP 412（WAF）；`runSync` 步骤 5 逐视频取分P信息无容错，单个 412 抛穿整轮 → 9/6–9/11 每日冻结。修复 = 端点降级链（`wbi/view` 主 → `pagelist` 备）+ 逐视频跳过容错。SESSDATA 有效，无需重填。
 **关键依据文档:** 诊断全文与定稿决策已归档 `context_history.md`「插入任务：每日同步 412 冻结（2026-09-11）」段（含证据时间线、复现命令、探针矩阵）；审查记录（含 critic 报告摘要与三项裁定）见「本 Phase 历史」[2026-09-11 04:46] 条。上一 Phase 归档：`context_history.md`「Phase：视觉语言翻新 — 液体玻璃（2026-09-03）」段。视觉稿 Artifact `https://claude.ai/code/artifact/2da1c9e3-223d-4ba4-98df-8edb22efc2ea`（源 `plans/ui-refresh/canvas-src/`）。
@@ -27,7 +27,7 @@
 - 真机性能确认：液体玻璃 `backdrop-filter`（headless 4× throttle 已测；详情见上一 Phase 关闭条目）
 - `@supports` 玻璃回退块 DRY（约 12 份散在组件 scoped 样式）
 - `styleSrc 'unsafe-inline'` 移除需 nonce/hash 方案
-- Dependabot 告警 20 个（11 high / 6 moderate / 3 low）—— 下次开 Phase 前拉全量重新分诊
+- Dependabot 告警 **28 个**（15 high / 10 moderate / 3 low，2026-09-11 push 时 GitHub 报；9/3 为 20、7/12 评估仅 2 —— 持续上涨）—— 下次开 Phase 前拉全量重新分诊，勿沿用旧判断
 - M4 完整版（独立 `SESSDATA_ENC_KEY` + 迁移，全局者实现域）
 - 若 wbi 端点日后强制 wbi 签名（w_rid/wts）：改 pagelist 为主端点，或实现 wbi 签名 —— 本次刻意不做（无签名 wbi/view 现测 200，先最小改动）
 
