@@ -948,3 +948,45 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 - `styleSrc 'unsafe-inline'` 既有弱点，移除需 nonce/hash 方案
 - **真机性能未验证**：headless 4× throttle 43-50fps，A/B 证明掉帧是既有 wave 动画、玻璃化增量 <3fps；建议用户在自己手机滚一次首页确认
 - M4 完整版（独立 SESSDATA_ENC_KEY + 迁移，全局者实现域）—— 跨多个 Phase 未启动的旧将来项
+
+---
+
+# 插入任务：每日同步 412 冻结（2026-09-11）
+
+## [2026-09-11 04:28] 全局者（blog 侧会话预诊断，经用户转交）— 插入任务：每日同步 412 冻结
+
+**背景：** 用户报「bili 项目 SESSDATA 填了但无法同步」。本条由误起于 blog 目录的会话完成初步诊断后转交 —— **bili 侧全局者请复核后再定稿任务清单。**
+
+**已实证（本机实测/查证）：**
+- 服务：PM2 `bili`（`server/scripts/start.sh`）在线，uptime 7D；日志 `~/.pm2/logs/bili-{out,error}.log`。
+- DB `sync_log` 时间线：8/20–8/31 每日成功（更新 4）；9/1–9/3 03:07「Cookie 验证失败 — SESSDATA 已过期」×3；**9/3 10:00 用户更新 Cookie 后恢复**（9/3 10:00、9/4、9/5 成功）；**9/6–9/11 每日「定时同步异常，请查看服务器日志」**；`last_sync_status` 停在 9/11 03:07。
+- error log 栈（9/6 起每日；手动同步 `routes/sync.js` 同样失败）：`B站 API 请求失败: HTTP 412` @ `biliGet(bilibili.js:25)` ← `fetchVideoPages(bilibili.js:188)` ← `getPagesInfo(sync.js:75)` ← `runSync(sync.js:159)`。失败点在**逐视频分P信息** `/x/web-interface/view`，位于 nav 验证与历史拉取**之后** → SESSDATA 有效，非 Cookie 问题。
+- 无凭据探针（2026-09-11，本 VPS，curl；UA 取 `bilibili.js:2` 常量，Referer=`https://www.bilibili.com/`）：
+  - `/x/web-interface/view`：裸 curl（默认 UA）→ 200；仅 Referer（curl UA）→ 200；**仅 Chrome/125 型 UA → 412**；UA+Referer → 412（复现两次）→ **触发条件是 UA**。
+  - UA+Referer+`buvid3`（`/x/frontend/finger/spi` 现取）→ 412（**buvid3 无效**）。
+  - **`/x/web-interface/wbi/view` + UA + Referer → 200**，`code=0`、`data.pages` 160 项（与 /view 同形状）。
+  - **`/x/player/pagelist?bvid=` + UA + Referer → 200**，含 cid/duration。
+  - 对照：`/x/web-interface/nav`、`/x/web-interface/history/cursor` 探针均 200（无登录态 code -101，预期）。
+- 【推断】9/4、9/5 成功是因分P缓存（7 天 TTL）未过期、无 /view 请求；9/6 起首个缓存过期条目触发 /view → 412 → 整轮抛异常 → 每日复现。`page_cache` 最后写入 2026-09-03 11:45。
+
+**给 bili 侧全局者的建议方向（未定稿）：**
+1. **修复（最小改动）**：`fetchVideoDetail` 端点换 **`/x/web-interface/wbi/view`**（实证 200 同形状）；备选 `/x/player/pagelist`。可考虑失败降级链（wbi/view → /view → pagelist）。
+2. **容错（结构性问题，与根因独立）**：`runSync` 第 5 步逐视频 `getPagesInfo` 加 per-video try/catch —— 失败跳过该视频本次更新（保留库中原值）记警告、继续其余；参照 `getAddCandidates` 既有降级写法。理由：本次一个 412 冻结全站 6 天。
+3. **验证**：改后本地手动 `POST /api/sync`（或 node 直调 runSync）确认 8 个视频恢复更新、归档逻辑无回归；测试走既有约定（干净环境 + TEST_DB）；重启走 `scripts/start.sh`；留意 9/12 03:07 cron 首次自动跑结果。
+4. 如需复测：上列 curl 探针可原样重跑（带真实 SESSDATA 的 wbi/view 稳定性属未验证项，见「当前状态」）。
+
+**移交：** bili 侧全局者复核本诊断 → 定稿方案与任务清单 → 派工作者。
+
+## [2026-09-11 04:40] 全局者 — 412 冻结：复核证认与方案定稿
+
+**背景：** blog 侧会话预诊断（「本 Phase 历史」[2026-09-11 04:28] 条目）转交本侧复核定稿。
+
+**复核动作（本侧独立，2026-09-11 04:32）：** DB `sync_log` 9/6–9/11 六行 failed，错误栈与代码逐行对码（bilibili.js:188 ← sync.js:75 ← sync.js:159）；PM2 `bili` online（uptime 7D）。curl 复测（UA 取 `bilibili.js:2` 常量）：无凭据 —— `/view` → 412、`wbi/view` → 200/86 页、`pagelist` → 200/86 项；**带生产 SESSDATA**（只读解密自 DB，未打印）—— nav isLogin=true、wbi/view → 200/86 页、单P视频 pages=1。诊断全部成立（含「分P缓存 7 天 TTL 解释 9/4–9/5 成功」的推断）。
+
+**决策：**
+1. 端点换 **`wbi/view`（主）→ `pagelist`（备）** 两端点降级链；不收 legacy `/view` 进链（现测必 412，白费请求）。降级由异常触发，单P/null 语义逐字保留。
+2. 容错采纳 per-video try/catch，但语义为**跳过式（保留库中原值）**，不用 `getAddCandidates` 式的单集进度降级 —— 后者对多P视频可能高估（单集 100% ≠ 全局 100%）并误触发归档倒计时；跳过是保守且不写错数据。跳过数上浮到同步消息 + 返回体（本次事故本质是「静默冻结 6 天」，可观测性是修复的一部分）。
+3. 不实现 wbi 签名（KISS：无签名现测 200；已入 backlog 备忘）。
+4. 升级判定：非强制升级项（不涉认证/密钥/并发/不可逆），交工作者；真实凭据下的生产实测放任务 3。
+
+**移交工作者：** 任务清单 1–3 已写入「当前状态」；完成后写交接块。
