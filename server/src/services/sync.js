@@ -145,6 +145,7 @@ export async function runSync() {
   const today = new Date().toISOString().slice(0, 10)  // 'YYYY-MM-DD'
   let updatedCount = 0
   let archivedCount = 0
+  let skippedCount = 0
 
   // 5. Process each B站 history entry that exists locally
   for (const video of history) {
@@ -156,7 +157,15 @@ export async function runSync() {
     let progressPct
     let effectiveDuration
 
-    const pagesInfo = await getPagesInfo(video.bvid, sessdata, pageCache)
+    let pagesInfo
+    try {
+      pagesInfo = await getPagesInfo(video.bvid, sessdata, pageCache)
+    } catch (err) {
+      console.warn('[sync] 分P信息获取失败，跳过视频:', video.bvid, err.message)
+      skippedCount++
+      continue
+    }
+
     const global = computeGlobalProgress(pagesInfo, video.cid, video.progress)
     if (global) {
       progressPct = global.progressPct
@@ -219,6 +228,7 @@ export async function runSync() {
   // 6. Log success
   const msg = `同步完成：更新 ${updatedCount} 个视频`
     + (archivedCount > 0 ? `，归档 ${archivedCount} 个已完成视频` : '')
+    + (skippedCount > 0 ? `，跳过 ${skippedCount} 个视频（分P信息获取失败）` : '')
 
   insertSyncLog('success', msg)
   setSetting('last_sync_status', msg)
@@ -228,7 +238,8 @@ export async function runSync() {
     ok: true,
     totalFetched: history.length,
     updated: updatedCount,
-    archived: archivedCount
+    archived: archivedCount,
+    skipped: skippedCount
   }
   } finally {
     syncing = false

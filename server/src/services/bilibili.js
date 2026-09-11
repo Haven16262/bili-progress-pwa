@@ -180,17 +180,28 @@ export async function fetchRecentHistory(sessdata, count = 30) {
     }))
 }
 
-async function fetchVideoDetail(bvid, sessdata) {
-  return biliGet('/x/web-interface/view', { bvid }, sessdata)
-}
-
+// Legacy /x/web-interface/view is WAF-blocked (HTTP 412) for our UA; /x/player/pagelist
+// (bare-array shape) is the backup endpoint. Fallback triggers only on primary exception.
 export async function fetchVideoPages(bvid, sessdata) {
-  const data = await fetchVideoDetail(bvid, sessdata)
-  if (!data || !Array.isArray(data.pages) || data.pages.length <= 1) {
-    return null
+  let rawPages
+  try {
+    const data = await biliGet('/x/web-interface/wbi/view', { bvid }, sessdata)
+    rawPages = data && Array.isArray(data.pages) ? data.pages : []
+  } catch (wbiErr) {
+    try {
+      const list = await biliGet('/x/player/pagelist', { bvid }, sessdata)
+      rawPages = Array.isArray(list) ? list : []
+    } catch (pagelistErr) {
+      throw new Error(
+        `分P信息接口均失败 — wbi/view: ${wbiErr.message}; pagelist: ${pagelistErr.message}`
+      )
+    }
   }
+
+  if (rawPages.length <= 1) return null
+
   return {
-    pages: data.pages.map(p => ({ cid: p.cid, duration: p.duration || 0 })),
-    totalDuration: data.pages.reduce((sum, p) => sum + (p.duration || 0), 0)
+    pages: rawPages.map(p => ({ cid: p.cid, duration: p.duration || 0 })),
+    totalDuration: rawPages.reduce((sum, p) => sum + (p.duration || 0), 0)
   }
 }

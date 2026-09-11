@@ -351,4 +351,73 @@ describe('archive counting (H1 bug)', () => {
     expect(thirdResult.ok).toBe(true)
     expect(thirdResult.locked).toBeUndefined()
   })
+
+  test('分P接口失败的视频被跳过 — 不写库不计数不落负缓存，其余照常更新，skipped=1 且消息含跳过数', async () => {
+    // BVfail is at 100% with count 2 — if processed it would tick to 3 and archive.
+    // BVok is a normal video using the single-P fallback path.
+    insertVideo('BVfail', { progress: 100, progress_100_count: 2 })
+    insertVideo('BVok', { progress: 50, duration: 300 })
+
+    fetchAllHistory.mockResolvedValue([
+      { bvid: 'BVfail', cid: 1, title: 'Fails', progress: 300, duration: 300 },
+      { bvid: 'BVok', cid: 1, title: 'OK', progress: 50, duration: 300 }
+    ])
+
+    fetchVideoPages
+      .mockRejectedValueOnce(new Error('分P信息接口均失败 — wbi/view: B站 API 请求失败: HTTP 412; pagelist: B站 API 请求失败: HTTP 412'))
+      .mockResolvedValueOnce(null)
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const r = await runSync()
+
+    expect(r.ok).toBe(true)
+    expect(r.skipped).toBe(1)
+    expect(r.updated).toBe(1)
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[sync] 分P信息获取失败，跳过视频:',
+      'BVfail',
+      expect.stringContaining('HTTP 412')
+    )
+    warnSpy.mockRestore()
+
+    // Failed video: row untouched — no progress write, no count tick, no archive, no sync timestamp
+    const failRow = testDb.prepare(
+      'SELECT progress, progress_100_count, archived, last_synced_at FROM videos WHERE bvid = ?'
+    ).get('BVfail')
+    expect(failRow.progress).toBe(100)
+    expect(failRow.progress_100_count).toBe(2)
+    expect(failRow.archived).toBe(0)
+    expect(failRow.last_synced_at).toBeNull()
+
+    // No negative cache written for the failed video (unsuccessful fetch)
+    expect(testDb.prepare('SELECT * FROM page_cache WHERE bvid = ?').get('BVfail')).toBeUndefined()
+    // ...while the successful single-P video does get its negative cache
+    expect(testDb.prepare('SELECT * FROM page_cache WHERE bvid = ?').get('BVok').page_count).toBe(0)
+
+    // Other video: updated normally via the single-P fallback
+    const okRow = testDb.prepare('SELECT progress, last_synced_at FROM videos WHERE bvid = ?').get('BVok')
+    expect(okRow.progress).toBe(16.67)
+    expect(okRow.last_synced_at).not.toBeNull()
+
+    // sync_log message carries the skip count
+    const log = testDb.prepare('SELECT message FROM sync_log ORDER BY id DESC LIMIT 1').get()
+    expect(log.message).toContain('跳过 1 个')
+  })
+
+  test('无失败时消息与旧格式逐字一致（无跳过后缀）且 skipped=0', async () => {
+    insertVideo('BVclean', { progress: 50, duration: 300 })
+
+    fetchAllHistory.mockResolvedValue([
+      { bvid: 'BVclean', cid: 1, title: 'Clean', progress: 50, duration: 300 }
+    ])
+
+    const r = await runSync()
+
+    expect(r.ok).toBe(true)
+    expect(r.skipped).toBe(0)
+
+    const log = testDb.prepare('SELECT message FROM sync_log ORDER BY id DESC LIMIT 1').get()
+    expect(log.message).toBe('同步完成：更新 1 个视频')
+  })
 })
