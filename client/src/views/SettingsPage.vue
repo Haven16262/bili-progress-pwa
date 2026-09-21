@@ -110,7 +110,7 @@
       <section class="settings-card settings-card--muted">
         <p>Bili Progress PWA v1.0</p>
         <p>进度数据以 B 站为准，名称和置顶以本地为准</p>
-        <p>视频进度达 100% 持续 3 天后自动归档</p>
+        <p>视频进度达 100% 持续 7 天后自动归档</p>
       </section>
     </div>
   </div>

@@ -23,6 +23,8 @@ import {
 import { decryptSessdata } from './crypto.js'
 
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
+// 100% 视频在首页保留的日历日数，到期后归档（自然 100% 与手动完成两条路径共用）
+const ARCHIVE_AFTER_DAYS = 7
 
 let syncing = false
 
@@ -190,7 +192,7 @@ export async function runSync() {
         progress100Map.set(video.bvid, newCount)
         progress100DateMap.set(video.bvid, today)
 
-        if (newCount >= 3) {
+        if (newCount >= ARCHIVE_AFTER_DAYS) {
           archiveVideo(video.bvid)
           archivedCount++
         }
@@ -218,7 +220,7 @@ export async function runSync() {
       progress100Map.set(bvid, newCount)
       progress100DateMap.set(bvid, today)
 
-      if (newCount >= 3) {
+      if (newCount >= ARCHIVE_AFTER_DAYS) {
         archiveVideo(bvid)
         archivedCount++
       }

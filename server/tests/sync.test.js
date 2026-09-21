@@ -282,9 +282,9 @@ describe('archive counting (H1 bug)', () => {
     expect(getProgress100Count('BVmanual')).toBe(1)
   })
 
-  test('达到 3 次计数 → 自动归档', async () => {
-    // Pre-set count to 2, this 3rd tick should trigger archive
-    insertVideo('BVarch', { progress: 100, progress_100_count: 2 })
+  test('达到 7 次计数 → 自动归档', async () => {
+    // Pre-set count to 6, this 7th tick should trigger archive
+    insertVideo('BVarch', { progress: 100, progress_100_count: 6 })
 
     fetchAllHistory.mockResolvedValue([
       { bvid: 'BVarch', cid: 1, title: 'Archive Me', progress: 300, duration: 300 }
@@ -296,6 +296,50 @@ describe('archive counting (H1 bug)', () => {
 
     const vid = testDb.prepare('SELECT archived FROM videos WHERE bvid = ?').get('BVarch')
     expect(vid.archived).toBe(1)
+  })
+
+  test('自然路径边界 — 第 6 次计数不归档、第 7 次归档', async () => {
+    insertVideo('BVedge', { progress: 100, progress_100_count: 5 })
+
+    fetchAllHistory.mockResolvedValue([
+      { bvid: 'BVedge', cid: 1, title: 'Edge', progress: 300, duration: 300 }
+    ])
+
+    const r1 = await runSync()
+    expect(r1.ok).toBe(true)
+    expect(getProgress100Count('BVedge')).toBe(6)
+    expect(r1.archived).toBe(0)
+    expect(testDb.prepare('SELECT archived FROM videos WHERE bvid = ?').get('BVedge').archived).toBe(0)
+
+    // 模拟跨日，让第 7 次计数可以落
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    testDb.prepare('UPDATE videos SET progress_100_date = ? WHERE bvid = ?').run(yesterday, 'BVedge')
+
+    const r2 = await runSync()
+    expect(r2.ok).toBe(true)
+    expect(getProgress100Count('BVedge')).toBe(7)
+    expect(r2.archived).toBe(1)
+    expect(testDb.prepare('SELECT archived FROM videos WHERE bvid = ?').get('BVedge').archived).toBe(1)
+  })
+
+  test('手动完成路径边界 — 第 6 次计数不归档、第 7 次归档', async () => {
+    insertVideo('BVedgeM', { progress: 100, progress_100_count: 5, manually_completed: 1 })
+    fetchAllHistory.mockResolvedValue([])
+
+    const r1 = await runSync()
+    expect(r1.ok).toBe(true)
+    expect(getProgress100Count('BVedgeM')).toBe(6)
+    expect(r1.archived).toBe(0)
+    expect(testDb.prepare('SELECT archived FROM videos WHERE bvid = ?').get('BVedgeM').archived).toBe(0)
+
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    testDb.prepare('UPDATE videos SET progress_100_date = ? WHERE bvid = ?').run(yesterday, 'BVedgeM')
+
+    const r2 = await runSync()
+    expect(r2.ok).toBe(true)
+    expect(getProgress100Count('BVedgeM')).toBe(7)
+    expect(r2.archived).toBe(1)
+    expect(testDb.prepare('SELECT archived FROM videos WHERE bvid = ?').get('BVedgeM').archived).toBe(1)
   })
 
   test('M1 单P负缓存 — 第二次 runSync 不重复请求 view API', async () => {
@@ -353,7 +397,7 @@ describe('archive counting (H1 bug)', () => {
   })
 
   test('分P接口失败的视频被跳过 — 不写库不计数不落负缓存，其余照常更新，skipped=1 且消息含跳过数', async () => {
-    // BVfail is at 100% with count 2 — if processed it would tick to 3 and archive.
+    // BVfail is at 100% with count 2 — if processed it would tick to 3 (below the 7-day archive threshold).
     // BVok is a normal video using the single-P fallback path.
     insertVideo('BVfail', { progress: 100, progress_100_count: 2 })
     insertVideo('BVok', { progress: 50, duration: 300 })
