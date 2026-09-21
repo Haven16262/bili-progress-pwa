@@ -1,6 +1,6 @@
 # 009 — 首页 100% 视频的「庆祝」动效（A+C · 蓝紫→兰紫渐变）+ 归档天数 3→7
 
-- **Status**: TODO
+- **Status**: DONE（实现 + 审查通过；commit `c78c2a6` Part A / `a3a462e` Part B；上线以 T5 构建完成为准）
 - **Decided**: 2026-09-21（用户在 /design 画布上从两版紫光里选定第 ② 版）
 - **Owner**: 工作者实现，全局者复审（非强制升级项：纯前端动效 + 一个常量改动）
 - **设计稿（视觉真相）**: 画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 的第 ② 块；源已存仓库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（**以这份文件里的 CSS 数值为准**，下面只列意图与规则）

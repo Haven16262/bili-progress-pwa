@@ -15,7 +15,7 @@
 | 006 | [首载注水动画 + 数字 count-up](006-first-load-fill-up.md) | LOW（机会点） | DONE |
 | 007 | [网格入场 stagger](007-grid-entrance-stagger.md) | LOW（机会点） | DONE |
 | 008 | [删除未使用的 --ease-spring](008-remove-unused-spring-token.md) | LOW | DONE |
-| 009 | [100% 视频庆祝动效（A+C 紫光）+ 归档 3→7 天](009-celebrate-100.md) | 功能（用户提出） | TODO |
+| 009 | [100% 视频庆祝动效（A+C 紫光）+ 归档 3→7 天](009-celebrate-100.md) | 功能（用户提出） | DONE |
 
 ## 推荐执行顺序与依赖
 

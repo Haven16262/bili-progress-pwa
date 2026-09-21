@@ -1071,3 +1071,49 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **新增约定：** 已在「跨 Phase 关键约定」补「删除 = 用户手动硬删除」（08:34 已写，本轮确认无需再改）。
 
 **移交：** 无工作者待办。用户肉眼确认红底按钮观感（见「未验证的前提」④）。
+
+## [2026-09-21 08:43] 工作者 — 删除功能：实现 + 测试 + 端到端验证完成
+
+**完成情况：**
+- **T1 后端测试**：新增 `server/tests/videos-delete.test.js` —— 真实路由测试（挂生产 `videos` router 含 `requireAuth`，token 由 `signToken()` 用 `vitest.config.js` 注入的测试 JWT_SECRET 签发，用 Node 内置 fetch 打临时监听端口；未引入 supertest 等新依赖）。7 例：删除成功 200 且行从 `listVideos()`/`listCompletedVideos()` 双消失；不存在 id → 404 且不影响其它行；非法 id（0/-1/1.5/abc）→ 400 且不删任何行；无 token → 401 且行仍在。`sync.test.js` 新增 1 例「已删除的 bvid 在 B站 历史窗口里 → runSync 后库里仍无该行」（同时断言 updated=0、fetchVideoPages 未被调用、消息「同步完成：更新 0 个视频」）。**红验证**：临时给 `sync.js` 注入「未知 bvid 就 INSERT 后 continue」缺陷 → 该例变红（失败点正是「库里仍无该行」断言）→ 还原，`git diff -- server/src/services/sync.js` 为空。干净 shell（`env -i PATH=/usr/bin:/bin HOME=/root`）**44 例全绿**（原 36 + 新 8）。
+- **T2 首页删除按钮**：`HomePage.vue` 弹窗底部加全宽红底「删除」（在「标记为已看完」下方，`margin-top: 1rem` 拉开间距；实心色无 backdrop-filter，故无 `@supports` 回退）。`window.confirm` 一次 → `api.deleteVideo(id)`；成功或 404 → 本地数组移除 + 关弹窗；其它失败 → `window.alert(e.message || '删除失败，请重试')` 且弹窗保持；请求在途 `:disabled`。保留 focus-visible accent outline 与 hover/active 反馈。
+- **T3 设置页删除**：`SettingsPage.vue` 已看完列表每行右侧加紧凑红底胶囊「删除」（与相邻 badge 同高 11px）；名称保持 ellipsis（`.settings-details__name` 补 `flex: 1`）；行为同 T2，在途按行禁用（`deletingIds` Set）。
+- **颜色 token**：`main.css` `:root` 新增 `--color-danger-solid: #dc2626`（白字 4.83:1 ≥ AA）与 `--color-danger-solid-hover: #b91c1c`（6.47:1），`tailwind.config.js` 的 `feedback` 同步两键；原 `--color-danger` 注释补「白字压其上仅 3.76:1，不可当实心按钮底」。（对比度按「当前视觉语言」约定的声明色静态模型算。）
+- **共用文案**：新增 `client/src/utils/videoDelete.js` 的 `confirmVideoDelete(video)`，文案 = 首行「确定要删除「<custom_name 或 title>」吗？」+ 空行 + 「此操作不可恢复，本地重命名、置顶状态与「已看完」标记也会一并丢失。」；两个入口共用同一份，防文案漂移。
+- **T4 端到端验证**：脚本 `/tmp/bili-verify/bili-verify-delete.mjs`（Playwright，**未进仓库**）。前端走 vite dev（`localhost:5173`，其 `/api` 代理指向生产 `127.0.0.1:3000`）→ 真实 Express + requireAuth + JWT + SQLite。**连续 3 轮 34/34 全过**。覆盖：首页取消（视频仍在、弹窗保持）／确认（弹窗关闭、卡片立即消失、刷新后仍不在、服务端行已消失）／失败（拦截 DELETE→500：alert 出现、弹窗保持、视频仍在）／在途禁用（DELETE 延迟 900ms 实测，两入口各 1 例）／设置页 375 与 320 宽无横向溢出（html 与行元素 scrollWidth 实测；截图 `/tmp/bili-verify-shots/02-settings-375.png`、`02-settings-320.png`）／设置页取消·确认·刷新持久·首页对应卡片同步消失／404 路径（另一端先真删 → UI 不再弹 alert、关弹窗、卡片消失）／无未捕获页面错误。测试数据只有假 bvid `BV_TEST_DEL_0921A/B/C`，**未对 11 条真实记录做任何写操作**（前后两列表 bvid 集合逐条一致）。
+- **T5 收尾**：`CHANGELOG.md` 加 `## [1.2.0] — 2026-09-21`（Added 三条，沿用版本段风格）；`npm run build` 绿（dist/assets/index-CwKkmMT3.js + index-NzTtxpY7.css）；commit `bac5b29`（8 文件，271+/2−，只带自辖路径，`context.md` 未提交）；**未 push**。
+- **库核对（只读）**：总行数 **11**（首页 9 + 已看完 3，重叠 1；已归档 2），`BV_TEST_DEL_0921%` 残留 0。
+
+**任务进度：**
+- [x] T1 后端测试补齐
+- [x] T2 首页删除按钮
+- [x] T3 设置页删除
+- [x] T4 端到端验证
+- [x] T5 收尾
+
+**关键决策点：**
+- 架构/接口变动：**后端零改动**（复用既有 `DELETE /api/videos/:id`）。前端新增模块 `client/src/utils/videoDelete.js`；新增 2 个 CSS token 并同步 `tailwind.config.js`。
+- 安全相关：**用户输入** —— 本轮唯一新增输入面是 URL 里的 `:id`，后端校验逐字未改（400/404/200 语义不变），已由 T1 真实路由测试覆盖（含 0/-1/1.5/abc 与无 token）。**外部请求**：无新增（未碰 B站 相关代码）。认证/密钥/SQL/文件路径：无。前端新增内容全部是模板插值与静态样式，无 innerHTML/动态 HTML 注入。
+- 偏离原计划：① 抽出 `utils/videoDelete.js` 供两入口共用（原决策只要求「每个入口只弹一次确认」，未指定文案实现是否共用——我判断共用才能保证两处文案逐字一致）；② T5 构建使前端上线（见下疑虑 1）。其余无偏离。
+- 未解决的疑虑：
+  1. **`npm run build` 等于前端上线**：`client/dist` 正是 PM2 所服务的静态目录，所以 T5 的构建动作已把本轮前端投放到生产（curl 验证：生产 3000 的 index.html 已引用新哈希资源，新 CSS 含 `danger-solid`）。「无需 pm2 restart」的依据 = `server/src/index.js` 的 `express.static(distPath)` 按请求读盘，属**判断**，未重启验证；先例依据 = 2026-09-03 轮（`client/dist` 上次构建时间即该轮 12:08）。若全局者认为未过审不应先构建，请审查时提出。
+  2. 失败路径的 500 由 Playwright 路由伪造，未制造真实后端 500；真实 500 走同一段 catch，判断风险低。
+  3. `page_cache` 删除后留孤行仍未实测（沿用「未验证的前提」，本轮未清）。
+  4. **「本 Phase 历史」现有 3 条**（[09-11 工作者]、[09-21 09:05 全局者]、本条），超出「只留最近 1 对」；[09-11 工作者] 条在 `context_history.md` 已有归档。归档按 WORKFLOW 属全局者职责，我未擅自处理，仅此标注。
+  5. 时间戳注记：本机时钟现为 2026-09-21 08:43 UTC，而上一轮全局者条目标注 09:05（晚于本机当前时间；`context.md` mtime 为 08:34）。本块按实际时间记录，若上条时间有误由全局者订正。
+
+**顺带变动：** 按工作者写入流程第一步，已在「当前状态」把 T1–T5 勾为完成并加一行「工作者完成状态」；全局者的决策内容（已定细节、未验证的前提、backlog）一字未动。
+
+# 插入任务：100% 视频庆祝动效 + 归档 3→7 天（2026-09-21）
+
+## [2026-09-21 10:39] 全局者 — 定稿：100% 视频庆祝动效（A+C 紫光）+ 归档 3→7 天
+
+**背景：** 用户（2026-09-21）要为首页「进度 100% 且未归档」的视频加特殊动效，灵感来自 Claude Code 的 ultracode 模式；并把 100% 视频的首页保留期改为 7 天。全局者先给出「动效放哪 / 怎么贴合 UI / 持续多久」三问的分析，用户逐条拍板后，经 /design 画布出方案，两轮迭代收敛：第一轮彩虹 → 用户指出「ultracode 不是彩虹、且彩虹与紫色玻璃液体违和」→ 改紫色系；用户选 A+C 为基调 → 指出白光单调 → 出「① 单色亮紫」「② 蓝紫→兰紫渐变」两版 → **用户选 ②**。
+
+**决策：** 见「当前状态」与 `plans/009-celebrate-100.md`（规格、数值来源、验证清单全在里面）。要点：只播一次（每视频每设备，localStorage）、reduced-motion 留静态终态、含手动完成触发、设置页不做、7 日历日归档、构建上线放复审后。
+
+**全局者自查并纠正的两处（如实记录）：**
+1. 画布里我最初把杯内数字画成 18px，而真实代码 `clamp(12px,16%,18px)` 实算约 12px（判断，未实测）——已在画布上把普通杯纠正为 12px，庆祝态保持用户看过的 20px。这意味着**庆祝态数字比其它杯子明显大**，是设计上的有意强调，已写入计划。
+2. 计划初稿里我写「淡紫底色对比度可能贴线」是估算；随后**实算**：`#ddd6fe`/`#f5d0fe` 对中部液体色仅 2.62/2.65，**不达标**，参考稿里的这两个停点必须提亮（写入计划，含完整数值表）。用户看过的「淡紫色泽」数字在实现里会**略偏白**——这是可读性的代价，若用户觉得太白，回来商量的方向是加强扫光带/柔光/光环，不是再压暗数字。
+
+**移交工作者：** T1（归档 7 天，先做）→ T2（动效）→ T3（验证截图）→ T4（构建时机）。交接块请含：真实数字字号、每个底色停点的实算对比度、光环在手机横滚容器里是否被裁、8 项验证结果、截图路径。
