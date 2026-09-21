@@ -455,7 +455,7 @@ const bloomStyle = computed(() => ({
 
 /* ---- 数字：静态终态 = 淡紫渐变（提亮后的停点，对杯中列 ≥3:1） ---- */
 .cylinder-wrapper.is-complete .progress-text {
-  font-size: 20px;
+  font-size: 16px;
   padding: 0 2px;
   background: var(--celebrate-sheen), var(--celebrate-text-base);
   background-size: 250% 100%, 100% 100%;
@@ -466,7 +466,8 @@ const bloomStyle = computed(() => ({
   color: transparent;
   -webkit-text-fill-color: transparent;
   text-shadow: none;
-  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+  /* 静态终态不带柔光（用户反馈笔画发虚）：只留深紫描边 + 黑影，柔光只在庆祝/悬停时出现 */
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-none);
 }
 
 /* ---- 首次庆祝（3s，一次性） ---- */
@@ -518,7 +519,7 @@ const bloomStyle = computed(() => ({
   100% {
     background-position: 150% 0, 0 0;
     transform: translate(-50%, -50%) scale(1);
-    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-none);
   }
 }
 
@@ -554,7 +555,7 @@ const bloomStyle = computed(() => ({
   0% {
     background-position: 150% 0, 0 0;
     transform: translate(-50%, -50%) scale(1);
-    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-none);
   }
   12% {
     transform: translate(-50%, -50%) scale(1.18);
@@ -569,7 +570,7 @@ const bloomStyle = computed(() => ({
   100% {
     background-position: 150% 0, 0 0;
     transform: translate(-50%, -50%) scale(1);
-    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-none);
   }
 }
 

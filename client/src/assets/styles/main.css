@@ -100,9 +100,9 @@
   /* 杯外光环 / 绕杯亮弧（conic 渐变，数值同参考稿） */
   --celebrate-halo: conic-gradient(from 0deg, rgb(129 140 248 / 0.75), rgb(168 85 247 / 0.8), rgb(232 121 249 / 0.75), rgb(168 85 247 / 0.8), rgb(129 140 248 / 0.75));
   --celebrate-arc: conic-gradient(from var(--ang), transparent 0deg, transparent 215deg, rgb(129 140 248 / 0.8) 268deg, rgb(168 85 247 / 0.95) 305deg, rgb(232 121 249) 340deg, transparent 360deg);
-  /* 数字三层 drop-shadow：深紫描边（保住扫光经过时的可读性，不许删）+ 紫/兰紫柔光（静态 / 峰值 / 零） */
+  /* 数字三层 drop-shadow：深紫描边（保住扫光经过时的可读性，不许删）+ 紫/兰紫柔光（峰值 / 零）
+     静态终态用 glow-none（用户 2026-09-21 反馈数字笔画发虚），柔光只出现在庆祝与悬停重放中 */
   --celebrate-outline: drop-shadow(0 0 1.2px rgb(59 7 100 / 0.85));
-  --celebrate-glow: drop-shadow(0 0 5px rgb(129 140 248 / 0.55)) drop-shadow(0 0 5px rgb(232 121 249 / 0.55));
   --celebrate-glow-strong: drop-shadow(0 0 11px rgb(129 140 248 / 0.95)) drop-shadow(0 0 11px rgb(232 121 249 / 0.95));
   --celebrate-glow-none: drop-shadow(0 0 0px rgb(129 140 248 / 0)) drop-shadow(0 0 0px rgb(232 121 249 / 0));
 
