@@ -1,7 +1,19 @@
 <template>
-  <button class="cylinder-wrapper" @click="$emit('click')" :aria-label="`${displayName} — 进度 ${Math.round(progress)}%`">
+  <button
+    ref="rootEl"
+    class="cylinder-wrapper"
+    :class="{ 'is-complete': isComplete, 'is-celebrating': celebrating }"
+    @click="$emit('click')"
+    :aria-label="`${displayName} — 进度 ${Math.round(progress)}%`"
+  >
     <!-- Liquid-color bloom behind the cup (cheap radial, no backdrop-filter — T7) -->
     <div class="cup-bloom" :style="bloomStyle" aria-hidden="true"></div>
+
+    <!-- 100% 庆祝：杯外光环 + 绕杯亮弧（在杯子后面；静态态亮弧 opacity 0） -->
+    <template v-if="isComplete">
+      <div class="cup-halo" aria-hidden="true"></div>
+      <div class="cup-arc" aria-hidden="true"></div>
+    </template>
 
     <!-- Glass cylinder -->
     <div class="cylinder-glass">
@@ -38,25 +50,60 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
+import { hasCelebrated, markCelebrated } from '../utils/celebrated.js'
 
 defineEmits(['click'])
 
 const props = defineProps({
   progress: { type: Number, default: 0 },
   customName: { type: String, default: '' },
-  fullTitle: { type: String, default: '' }
+  fullTitle: { type: String, default: '' },
+  videoId: { type: [Number, String], default: null }
 })
 
 // First-load fill-up animation state
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const FILL_DURATION_MS = 800  // matches --duration-liquid
+const CELEBRATION_MS = 3000   // 与 CSS 三组庆祝动画时长一致
+const STAGGER_MS = 40         // 与 HomePage .cylinder-stagger 的 animation-delay 步长一致
 
+const rootEl = ref(null)
 const isFilled = ref(REDUCED_MOTION)  // skip animation when reduced-motion
 const displayProgress = ref(REDUCED_MOTION ? undefined : 0)
 let rafId = 0
 
+const isComplete = computed(() => props.progress >= 100)
+const celebrating = ref(false)
+let startTimer = 0
+let endTimer = 0
+
+function startCelebration() {
+  if (REDUCED_MOTION || !isComplete.value) return
+  if (hasCelebrated(props.videoId)) return
+  // 存储不可用（隐私模式等）→ 不播：否则每次刷新都会重播
+  if (!markCelebrated(props.videoId)) return
+  celebrating.value = true
+  clearTimeout(endTimer)
+  endTimer = setTimeout(() => { celebrating.value = false }, CELEBRATION_MS + 60)
+}
+
+// 等注水 + 数字 count-up 跑完（800ms）再起播；首次加载时还要加上该卡片的入场 stagger 延迟
+function scheduleCelebration(delayMs = 0) {
+  if (REDUCED_MOTION || !isComplete.value) return
+  const stagger = parseInt(getComputedStyle(rootEl.value).getPropertyValue('--stagger'), 10) || 0
+  clearTimeout(startTimer)
+  startTimer = setTimeout(startCelebration, FILL_DURATION_MS + stagger * STAGGER_MS + 100 + delayMs)
+}
+
+// 手动「标记为已看完」：progress 由 <100 变成 >=100（弹窗已关，杯子注满后起播）
+watch(() => props.progress, (now, before) => {
+  if (now >= 100 && before < 100) scheduleCelebration()
+})
+
 onMounted(() => {
+  if (isComplete.value) scheduleCelebration()
+
   if (REDUCED_MOTION) return
   requestAnimationFrame(() => {
     isFilled.value = true
@@ -76,7 +123,11 @@ onMounted(() => {
   })
 })
 
-onUnmounted(() => cancelAnimationFrame(rafId))
+onUnmounted(() => {
+  cancelAnimationFrame(rafId)
+  clearTimeout(startTimer)
+  clearTimeout(endTimer)
+})
 
 const displayName = computed(() => props.customName || props.fullTitle || '未命名')
 
@@ -354,6 +405,172 @@ const bloomStyle = computed(() => ({
   z-index: 5;
   pointer-events: none;
   white-space: nowrap;
+}
+
+/* ================================================================
+   100% 庆祝（plan 009 · A+C 蓝紫→兰紫）
+   数值同 plans/celebrate-100/reference-A+C-gradient.dc.html：
+   参考稿是 6s 预览循环，这里把 halo-burst / arc-burst / sheen 三组关键帧
+   百分比整体 ×2 压成「一次 3s」（iteration-count 1，无 fill-mode → 回落到静态终态）；
+   *-once 版本来就是 3s，直接用于悬停重放。
+   ================================================================ */
+
+@property --ang {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* ---- 杯外光环 / 绕杯亮弧（DOM 在杯子之前 = 视觉在杯后） ----
+   参考稿是 200×300 / 遮罩 60%→74%；这里整体缩到 92%（184×276）并把遮罩百分比
+   按同比例反算成 65%→80%，使**环带的绝对位置与参考稿逐点一致**，只收窄外侧渐隐区
+   —— 手机端横向滚动容器（.home-grid-scroll）会裁切超出列宽的部分，缩这一圈
+   是为了让裁切线落在渐隐区里、不切成硬边（实测见交接块）。 */
+.cup-halo,
+.cup-arc {
+  position: absolute;
+  left: 50%;
+  top: 44%;
+  width: 184px;
+  height: 276px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  -webkit-mask-image: radial-gradient(closest-side, transparent 65%, #000 80%, transparent 100%);
+  mask-image: radial-gradient(closest-side, transparent 65%, #000 80%, transparent 100%);
+  pointer-events: none;
+}
+
+.cup-halo {
+  background: var(--celebrate-halo);
+  filter: blur(7px);
+  opacity: 0.32;
+}
+
+/* 静态态：亮弧必须完全不可见（只依赖 @property --ang 的浏览器降级时也不能留常驻弧） */
+.cup-arc {
+  background: var(--celebrate-arc);
+  filter: blur(4px);
+  opacity: 0;
+}
+
+/* ---- 数字：静态终态 = 淡紫渐变（提亮后的停点，对杯中列 ≥3:1） ---- */
+.cylinder-wrapper.is-complete .progress-text {
+  font-size: 20px;
+  padding: 0 2px;
+  background: var(--celebrate-sheen), var(--celebrate-text-base);
+  background-size: 250% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  background-position: 150% 0, 0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+}
+
+/* ---- 首次庆祝（3s，一次性） ---- */
+.cylinder-wrapper.is-celebrating .cup-halo {
+  animation: celebrate-halo-burst 3s ease-out 1;
+}
+
+.cylinder-wrapper.is-celebrating .cup-arc {
+  animation: celebrate-arc-burst 3s linear 1;
+}
+
+.cylinder-wrapper.is-celebrating .progress-text {
+  animation: celebrate-sheen 3s ease-in-out 1;
+}
+
+@keyframes celebrate-halo-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.74); }
+  40% { opacity: 0.85; }
+  100% { opacity: 0.32; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes celebrate-arc-burst {
+  0% { opacity: 0; --ang: 0deg; }
+  16% { opacity: 1; }
+  88% { opacity: 1; --ang: 360deg; }
+  100% { opacity: 0; --ang: 360deg; }
+}
+
+@keyframes celebrate-sheen {
+  0% {
+    background-position: 150% 0, 0 0;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-none);
+  }
+  20% {
+    transform: translate(-50%, -50%) scale(1.2);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-strong);
+  }
+  44% {
+    background-position: -50% 0, 0 0;
+    transform: translate(-50%, -50%) scale(1.05);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-strong);
+  }
+  48% { background-position: 150% 0, 0 0; }
+  80% {
+    background-position: -50% 0, 0 0;
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-strong);
+  }
+  100% {
+    background-position: 150% 0, 0 0;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+  }
+}
+
+/* ---- 悬停重放：仅精确指针设备，且不在庆祝中；reduced-motion 下不重放 ---- */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .cylinder-wrapper.is-complete:not(.is-celebrating):hover .cup-halo {
+    animation: celebrate-halo-once 3s ease-out 1;
+  }
+
+  .cylinder-wrapper.is-complete:not(.is-celebrating):hover .cup-arc {
+    animation: celebrate-arc-once 3s linear 1;
+  }
+
+  .cylinder-wrapper.is-complete:not(.is-celebrating):hover .progress-text {
+    animation: celebrate-sheen-once 3s ease-in-out 1;
+  }
+}
+
+@keyframes celebrate-halo-once {
+  0% { opacity: 0.32; transform: translate(-50%, -50%) scale(1); }
+  25% { opacity: 0.85; transform: translate(-50%, -50%) scale(1.07); }
+  100% { opacity: 0.32; transform: translate(-50%, -50%) scale(1); }
+}
+
+@keyframes celebrate-arc-once {
+  0% { opacity: 0; --ang: 0deg; }
+  10% { opacity: 1; }
+  90% { opacity: 1; --ang: 360deg; }
+  100% { opacity: 0; --ang: 360deg; }
+}
+
+@keyframes celebrate-sheen-once {
+  0% {
+    background-position: 150% 0, 0 0;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+  }
+  12% {
+    transform: translate(-50%, -50%) scale(1.18);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-strong);
+  }
+  40% {
+    background-position: -50% 0, 0 0;
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow-strong);
+  }
+  50% { background-position: 150% 0, 0 0; }
+  80% { background-position: -50% 0, 0 0; }
+  100% {
+    background-position: 150% 0, 0 0;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 1px 3px rgb(0 0 0 / 0.5)) var(--celebrate-outline) var(--celebrate-glow);
+  }
 }
 
 /* ---- Label ---- */

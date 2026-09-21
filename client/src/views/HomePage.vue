@@ -65,6 +65,7 @@
           :progress="video.progress"
           :custom-name="video.custom_name"
           :full-title="video.title"
+          :video-id="video.id"
           @click="onEditVideo(video)"
         />
       </div>
@@ -80,6 +81,7 @@
           :progress="video.progress"
           :custom-name="video.custom_name"
           :full-title="video.title"
+          :video-id="video.id"
           @click="onEditVideo(video)"
         />
       </div>
@@ -143,6 +145,7 @@ import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
 import { confirmVideoDelete } from '../utils/videoDelete.js'
+import { pruneCelebrated } from '../utils/celebrated.js'
 
 // Device type detection via screen width breakpoints
 const MOBILE_BREAKPOINT = 768
@@ -225,6 +228,8 @@ async function loadVideos() {
   try {
     const data = await api.getVideos()
     videos.value = Array.isArray(data) ? data : []
+    // 已归档 / 已删除的 id 从「已庆祝」名单里剪掉，防 localStorage 数组无限增长
+    pruneCelebrated(videos.value.map(v => v.id))
   } catch { /* ignore */ }
   loading.value = false
 }
@@ -500,7 +505,10 @@ async function deleteVideo() {
   overflow-y: visible;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-x pan-y;
-  padding-bottom: 8px;
+  /* 100% 庆祝光环会溢出杯子所在列（上 24.6px / 左右 22px），滚动容器会把它裁成硬边。
+     这里加 padding 留出空间，再用等量负 margin 抵消 —— 卡片位置与滚动位置都不变。 */
+  padding: 16px 16px 8px;
+  margin: -16px -16px 0;
 }
 
 /* ---- Edit name modal ---- */

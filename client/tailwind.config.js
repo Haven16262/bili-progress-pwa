@@ -32,6 +32,12 @@ export default {
           text: '#082026',               // text on accent bg
         },
         // Semantic feedback colors
+        // 100% 庆祝动效三基色（sync with main.css --celebrate-*）
+        celebrate: {
+          blue: 'rgb(129 140 248)',       // 蓝紫
+          purple: 'rgb(168 85 247)',      // 紫
+          orchid: 'rgb(232 121 249)',     // 兰紫
+        },
         feedback: {
           success: '#4ade80',            // green-400
           warning: '#facc15',            // yellow-400
