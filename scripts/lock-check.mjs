@@ -10,7 +10,8 @@
 // 只依赖 node 内置模块 + `git` / `npm` / `gh` 命令。
 //
 // 环境变量 LOCK_CHECK_REGISTRY：**仅供测试**，把 npm 的 registry 指到本地假服务器；默认官方源。
-// 生效值一律回显在输出里。其余 npm 配置（环境变量 npm_config_*、cwd 的 .npmrc）一律不采信。
+// 生效值一律回显在输出里（非官方源时另加一行醒目提示）。其余配置一律不采信：
+// npm_config_*、NODE_ENV（会让 npm audit 跳过 devDependencies）、GIT_*、GH_HOST/GH_REPO、任何 .npmrc。
 import { spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,8 +23,12 @@ const EXIT_UNKNOWN = 2
 const TARGETS = ['server', 'client']
 const OFFICIAL_REGISTRY = 'https://registry.npmjs.org/'
 const EFFECTIVE_REGISTRY = process.env.LOCK_CHECK_REGISTRY || OFFICIAL_REGISTRY
-// 包名白名单（审查者用两份真实锁文件验证过 0 个不匹配）；不匹配的包名一律拒绝查询
-const PACKAGE_NAME_RE = /^(?:@[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~][A-Za-z0-9._~-]*$/
+// 包名白名单；不匹配的包名一律拒绝查询。首字符不许是 `.` / `_`（npm 包名本就不允许），
+// 否则 `.` / `..` 会被 npm 当成目录 spec 去读本地 package.json（复审 M-4）。
+// 已用两份真实锁文件验证 0 个不匹配。
+const PACKAGE_NAME_RE = /^(?:@[A-Za-z0-9~-][A-Za-z0-9._~-]*\/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*$/
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
+const INTEGRITY_RE = /^sha(?:1|256|384|512)-/
 const ALERTS_API = 'repos/Haven16262/bili-progress-pwa/dependabot/alerts?state=open&per_page=100'
 const MAX_BUFFER = 64 * 1024 * 1024
 
@@ -41,7 +46,11 @@ function parseArgs(argv) {
     const a = argv[i]
     if (a === '--diff') { opts.mode = 'diff'; opts.base = argv[++i] }
     else if (a === '--audit') { opts.mode = 'audit' }
-    else if (a === '--min-age-days') { opts.minAgeDays = Number(argv[++i]) }
+    else if (a === '--min-age-days') {
+      const v = argv[++i]
+      // 空串 Number('') === 0 会悄悄关掉冷却期，必须按非法处理
+      opts.minAgeDays = (typeof v === 'string' && /^\d+(?:\.\d+)?$/.test(v)) ? Number(v) : NaN
+    }
     else if (a === '--allow') { for (const s of String(argv[++i] ?? '').split(',')) if (s.trim()) opts.allow.add(s.trim()) }
     else if (a === '--root') {
       const v = argv[++i]
@@ -75,14 +84,21 @@ function cleanEnv() {
   const env = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (/^npm_config_/i.test(k)) continue
+    if (/^GIT_/i.test(k)) continue // GIT_DIR 等会让 git 读到别的仓库，把 base 对比放空
+    if (k === 'NODE_ENV') continue // production 时 npm audit 默认 omit dev，漏掉 devDependencies 的漏洞
+    if (k === 'GH_HOST' || k === 'GH_REPO') continue
     env[k] = v
   }
   return env
 }
 
-function npmConfigArgs() {
+// cwd：npm 实际工作的目录。显式 --prefix 到它，npm 就不会沿父目录往上找项目 .npmrc（复审 M-5）；
+// --include=dev 让 audit 即使环境里有 omit 之类的默认值也覆盖 devDependencies（复审 H-A）
+function npmConfigArgs(cwd) {
   return [
     `--registry=${EFFECTIVE_REGISTRY}`,
+    `--prefix=${cwd}`,
+    '--include=dev',
     `--userconfig=${join(scratchDir(), 'empty-user-npmrc')}`,
     `--globalconfig=${join(scratchDir(), 'empty-global-npmrc')}`
   ]
@@ -117,7 +133,7 @@ function readLockPackages(root, dir, ref, sha) {
     if (!existsSync(file)) throw new CannotCompute(`读不到 ${file}`)
     text = readFileSync(file, 'utf8')
   } else {
-    text = runGit(['show', `${sha}:${dir}/package-lock.json`], root)
+    text = runGit(['show', `${sha}:./${dir}/package-lock.json`], root) // ./ = 相对 --root（cwd），不是仓库根
   }
   let json
   try {
@@ -131,6 +147,14 @@ function readLockPackages(root, dir, ref, sha) {
   return json.packages
 }
 
+// 条目的「真名」：别名条目（有 name 字段且与 key 不同）以 entry.name 为准。
+// 冷却期、放行名单、resolved 绑定都必须用真名，否则查的是另一个包（复审 M-1）。
+function effectiveName(keyNm, entry, dir) {
+  if (entry.name === undefined) return keyNm
+  if (typeof entry.name !== 'string' || !entry.name) throw new CannotCompute(`[${dir}] ${keyNm} 的 name 不是非空字符串`)
+  return entry.name
+}
+
 // resolved 与 name/version 的绑定（H2）：registry.npmjs.org/<name>/-/<basename>-<version>.tgz
 function checkResolvedBinding(dir, name, entry, violations) {
   if (entry.resolved === undefined) return
@@ -142,12 +166,45 @@ function checkResolvedBinding(dir, name, entry, violations) {
   if (!m || !m[2].endsWith('.tgz')) {
     throw new CannotCompute(`[${dir}] ${name} 的 resolved 无法解析出包名/版本：${resolved}`)
   }
-  const expectedName = (entry.name && entry.name !== name) ? entry.name : name
-  const unscoped = expectedName.startsWith('@') ? expectedName.split('/')[1] : expectedName
-  const expectedBase = `${unscoped}-${entry.version}`
-  if (m[1] !== expectedName || m[2] !== `${expectedBase}.tgz`) {
+  const unscoped = name.startsWith('@') ? name.split('/')[1] : name
+  if (m[1] !== name || m[2] !== `${unscoped}-${entry.version}.tgz`) {
     violations.push(`[${dir}] ${name}@${entry.version} 的 resolved 指向别的包/版本：${resolved}`)
   }
+}
+
+// 条目自身的结构与内容断言（对新锁里每一个条目都跑）
+function checkEntry(dir, name, entry, old, violations) {
+  const isLink = entry.link === true
+  if (!isLink && (typeof entry.version !== 'string' || !entry.version)) {
+    throw new CannotCompute(`[${dir}] ${name} 缺 version 或不是字符串`)
+  }
+  if (entry.hasInstallScript !== undefined && entry.hasInstallScript !== true) {
+    throw new CannotCompute(`[${dir}] ${name} 的 hasInstallScript 不是 true（npm 只会写 true）：${JSON.stringify(entry.hasInstallScript)}`)
+  }
+  if (entry.resolved === undefined) {
+    // 只有 inBundle / link 条目合法地没有 resolved；其余缺了 = npm ci 要靠使用者的 registry 配置去解析、且没有 integrity 钉住（复审 M-2）
+    if (!isLink && entry.inBundle !== true) violations.push(`[${dir}] ${name}@${entry.version} 缺 resolved（也不是 inBundle/link）`)
+  } else {
+    if (typeof entry.resolved !== 'string') throw new CannotCompute(`[${dir}] ${name} 的 resolved 不是字符串`)
+    if (!entry.resolved.startsWith(OFFICIAL_REGISTRY)) {
+      violations.push(`[${dir}] ${name}@${entry.version} 的 resolved 不是官方 registry：${entry.resolved}`)
+    }
+    if (typeof entry.integrity !== 'string' || !INTEGRITY_RE.test(entry.integrity)) {
+      violations.push(`[${dir}] ${name}@${entry.version} 有 resolved 但 integrity 缺失或格式不对`)
+    }
+  }
+  if (entry.hasInstallScript && !(old && old.hasInstallScript)) {
+    violations.push(`[${dir}] ${name}@${entry.version} 新增了 install script`)
+  }
+  if (old && old.version === entry.version) {
+    if (old.resolved !== entry.resolved) {
+      violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 resolved 变了：${old.resolved} → ${entry.resolved}`)
+    }
+    if (old.integrity !== entry.integrity) {
+      violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 integrity 变了`)
+    }
+  }
+  checkResolvedBinding(dir, name, entry, violations)
 }
 
 function diffDir(root, dir, sha) {
@@ -168,29 +225,12 @@ function diffDir(root, dir, sha) {
     if (old !== undefined && (old === null || typeof old !== 'object')) {
       throw new CannotCompute(`[${dir}] ${sha}: 锁条目不是对象：${lockPath}`)
     }
-    const name = keyName(lockPath)
+    const key = keyName(lockPath)
+    const name = effectiveName(key, entry, dir)
     const isAdded = old === undefined
     const isBumped = old !== undefined && old.version !== entry.version
-    if (isAdded || isBumped) (isAdded ? added : bumped).push({ dir, name, from: old ? old.version : null, to: entry.version })
-
-    if (entry.resolved !== undefined && !entry.resolved.startsWith(OFFICIAL_REGISTRY)) {
-      violations.push(`[${dir}] ${name}@${entry.version} 的 resolved 不是官方 registry：${entry.resolved}`)
-    }
-    if (entry.resolved !== undefined && !entry.integrity) {
-      violations.push(`[${dir}] ${name}@${entry.version} 有 resolved 却缺 integrity`)
-    }
-    if (entry.hasInstallScript && !(old && old.hasInstallScript)) {
-      violations.push(`[${dir}] ${name}@${entry.version} 新增了 install script`)
-    }
-    if (old && old.version === entry.version) {
-      if (old.resolved !== entry.resolved) {
-        violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 resolved 变了：${old.resolved} → ${entry.resolved}`)
-      }
-      if (old.integrity !== entry.integrity) {
-        violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 integrity 变了`)
-      }
-    }
-    checkResolvedBinding(dir, name, entry, violations)
+    if (isAdded || isBumped) (isAdded ? added : bumped).push({ dir, name, key, from: old ? old.version : null, to: entry.version })
+    checkEntry(dir, name, entry, old, violations)
   }
   for (const [lockPath, entry] of Object.entries(oldPkgs)) {
     if (lockPath && !newPkgs[lockPath]) removed.push(`${keyName(lockPath)}@${entry.version}`)
@@ -200,7 +240,7 @@ function diffDir(root, dir, sha) {
 
 function publishTimes(name) {
   if (!PACKAGE_NAME_RE.test(name)) throw new CannotCompute(`包名不合法，拒绝查询：${JSON.stringify(name)}`)
-  const r = spawn('npm', ['view', '--json', ...npmConfigArgs(), '--', name, 'time'], { cwd: scratchDir() })
+  const r = spawn('npm', ['view', '--json', ...npmConfigArgs(scratchDir()), '--', name, 'time'], { cwd: scratchDir() })
   if (r.status !== 0) {
     throw new CannotCompute(`npm view ${name} time 失败（联网？exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
   }
@@ -212,6 +252,16 @@ function publishTimes(name) {
   }
   if (times === null || typeof times !== 'object') throw new CannotCompute(`npm view ${name} time 不是对象`)
   return times
+}
+
+// 别名条目同时写出锁 key，便于人读
+const describeItem = i => (i.key === i.name ? i.name : `${i.name}（别名 key ${i.key}）`)
+
+function printRegistry() {
+  console.log(`registry: ${EFFECTIVE_REGISTRY}`)
+  if (EFFECTIVE_REGISTRY !== OFFICIAL_REGISTRY) {
+    console.log('⚠ 非官方 registry（LOCK_CHECK_REGISTRY，仅供测试）——本次结果不能当作对官方源的检查')
+  }
 }
 
 function runDiff(opts) {
@@ -236,6 +286,10 @@ function runDiff(opts) {
   const timesCache = new Map()
   for (const dir of TARGETS) {
     for (const item of [...dirs[dir].bumped, ...dirs[dir].added]) {
+      // 版本串必须是 semver：time 对象里还有 created / modified 等非版本键，会被 hasOwn 命中（复审 L-d）
+      if (typeof item.to !== 'string' || !SEMVER_RE.test(item.to)) {
+        throw new CannotCompute(`[${dir}] ${item.name} 的版本号不是合法 semver，拒绝查冷却期：${JSON.stringify(item.to)}`)
+      }
       if (!timesCache.has(item.name)) timesCache.set(item.name, publishTimes(item.name))
       const times = timesCache.get(item.name)
       if (!Object.hasOwn(times, item.to)) throw new CannotCompute(`查不到 ${item.name}@${item.to} 的发布时间`)
@@ -254,12 +308,13 @@ function runDiff(opts) {
     }
   }
 
-  console.log(`registry: ${EFFECTIVE_REGISTRY}`)
+  printRegistry()
+  console.log(`冷却期阈值：${opts.minAgeDays} 天`)
   for (const dir of TARGETS) {
     const d = dirs[dir]
     console.log(`${dir}: 版本变化 ${d.bumped.length}，新增 ${d.added.length}，移除 ${d.removed.length}`)
-    if (d.bumped.length) console.log(`  变化：${d.bumped.map(i => `${i.name} ${i.from}→${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
-    if (d.added.length) console.log(`  新增：${d.added.map(i => `${i.name}@${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
+    if (d.bumped.length) console.log(`  变化：${d.bumped.map(i => `${describeItem(i)} ${i.from}→${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
+    if (d.added.length) console.log(`  新增：${d.added.map(i => `${describeItem(i)}@${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
     if (d.removed.length) console.log(`  移除：${d.removed.join('，')}`)
   }
   for (const a of opts.allow) {
@@ -290,7 +345,33 @@ function auditDir(root, dir) {
   const pkgJson = join(root, dir, 'package.json')
   if (existsSync(pkgJson)) copyFileSync(pkgJson, join(work, 'package.json'))
 
-  const r = spawn('npm', ['audit', '--package-lock-only', '--json', ...npmConfigArgs()], { cwd: work })
+  // 锁文件自身要像样：空锁/残缺锁不能报「0 漏洞」（复审 M-3）
+  let lock
+  try {
+    lock = JSON.parse(readFileSync(src, 'utf8'))
+  } catch {
+    throw new CannotCompute(`${dir}/package-lock.json 解析失败`)
+  }
+  if (!lock || typeof lock.packages !== 'object' || lock.packages === null) {
+    throw new CannotCompute(`${dir}/package-lock.json 没有 packages 段（需要 lockfileVersion 3）`)
+  }
+  const lockCount = Object.keys(lock.packages).filter(k => k).length
+  let declared = 0
+  if (existsSync(pkgJson)) {
+    try {
+      const pj = JSON.parse(readFileSync(pkgJson, 'utf8'))
+      for (const f of ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies']) {
+        if (pj && pj[f] && typeof pj[f] === 'object') declared += Object.keys(pj[f]).length
+      }
+    } catch {
+      throw new CannotCompute(`${dir}/package.json 解析失败`)
+    }
+  }
+  if (lockCount === 0 && declared > 0) {
+    throw new CannotCompute(`${dir}/package-lock.json 没有任何依赖条目，但 package.json 声明了 ${declared} 个依赖：锁文件残缺`)
+  }
+
+  const r = spawn('npm', ['audit', '--package-lock-only', '--json', ...npmConfigArgs(work)], { cwd: work })
   let json
   try {
     json = JSON.parse(r.stdout || '')
@@ -302,6 +383,9 @@ function auditDir(root, dir) {
   const deps = json?.metadata?.dependencies
   if (!vulns || typeof vulns.total !== 'number') throw new CannotCompute(`npm audit（${dir}）输出缺少 metadata.vulnerabilities`)
   if (!deps || typeof deps.total !== 'number') throw new CannotCompute(`npm audit（${dir}）输出缺少 metadata.dependencies.total`)
+  if (deps.total === 0 && lockCount > 0) {
+    throw new CannotCompute(`npm audit（${dir}）报 0 个依赖，但锁文件有 ${lockCount} 个条目：输出与锁文件矛盾`)
+  }
   if (vulns.total === 0 && r.status !== 0) {
     throw new CannotCompute(`npm audit（${dir}）报 0 漏洞但退出码是 ${r.status}，输出与状态矛盾`)
   }
@@ -311,7 +395,7 @@ function auditDir(root, dir) {
 function openAlerts() {
   // 不用 --paginate：>100 时 gh 会把多页数组拼成 [...][...]，无法解析且永远失败。
   // per_page=100 且长度到顶就按违规处理（不真翻页）。
-  const r = spawn('gh', ['api', ALERTS_API])
+  const r = spawn('gh', ['api', '--hostname', 'github.com', ALERTS_API]) // 钉死主机：GH_HOST 已在 cleanEnv 里剔除
   if (r.error) throw new CannotCompute(`GitHub 告警未查：gh 无法执行（${r.error.code || r.error.message}）`)
   if (r.status !== 0) {
     throw new CannotCompute(`GitHub 告警未查：gh api 查询失败（exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
@@ -331,7 +415,7 @@ function runAudit(opts) {
   const client = auditDir(opts.root, 'client')
   const alerts = openAlerts()
   const vulnTotal = server.vulns + client.vulns
-  console.log(`registry: ${EFFECTIVE_REGISTRY}`)
+  printRegistry()
   console.log(`  server 漏洞明细：${JSON.stringify(server.bySeverity)}`)
   console.log(`  client 漏洞明细：${JSON.stringify(client.bySeverity)}`)
   if (alerts.possiblyMore) console.log(`  ⚠ GitHub open 告警 ≥100，未翻页，按违规处理`)

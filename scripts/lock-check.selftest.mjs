@@ -4,7 +4,7 @@
 // - 只在临时目录里造夹具（git init 的小仓库 + 伪造锁文件 + PATH 里的 npm/gh 桩），
 //   不写真实仓库的任何文件，跑完清理。
 // - LOCK_CHECK_BIN=<路径> 可指定被测脚本（默认同目录的 lock-check.mjs）——用于「先红后绿」证据：
-//   拿旧版脚本跑本自测，H1–H4/M1/M2/L1/L5 各用例应当变红。
+//   拿旧版脚本跑本自测，H1–H4/M1/M2/L1/L5 与复审第二轮各用例应当变红。
 // - 需要真实 npm/gh 的用例（R1–R9）先探测联网；探测失败时记为「需联网但联网失败」，不算通过。
 // - 末行固定格式：`跑了 <N> 项，通过 <p>，失败 <f>，需联网但联网失败 <n>`；
 //   有失败或联网失败即非零退出。
@@ -77,7 +77,7 @@ function makeStub({ npm, gh }) {
   const dir = mkdtempSync(join(tmpRoot, 'bin-'))
   const stub = (name, spec) => {
     const record = spec.record
-      ? `appendFileSync(${JSON.stringify(spec.record)}, JSON.stringify({ args, cwd: process.cwd(), npmConfigKeys: Object.keys(process.env).filter(k => /^npm_config_/i.test(k)) }) + '\\n')\n`
+      ? `appendFileSync(${JSON.stringify(spec.record)}, JSON.stringify({ args, cwd: process.cwd(), npmConfigKeys: Object.keys(process.env).filter(k => /^npm_config_/i.test(k)), nodeEnv: process.env.NODE_ENV ?? null, leakedKeys: Object.keys(process.env).filter(k => /^GIT_|^GH_HOST$|^GH_REPO$/.test(k)) }) + '\\n')\n`
       : ''
     writeFileSync(join(dir, name), `#!/usr/bin/env node\nimport { appendFileSync } from 'node:fs'\nconst args = process.argv.slice(2)\n${record}process.stdout.write(${JSON.stringify(JSON.stringify(spec.output))})\nprocess.exit(${spec.exit ?? 0})\n`, { mode: 0o755 })
   }
@@ -241,7 +241,7 @@ function main() {
     cases.push({
       name: `H3 版本 ${weird} → 2（不是 NaN、不是 0）`, needs: null,
       run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
-      expect: (c, o) => c === 2 && o.includes('查不到 good-dep@') && !o.includes('最年轻 NaN')
+      expect: (c, o) => c === 2 && !o.includes('NaN') && !o.includes('违规 0 项')
     })
   }
 
@@ -354,6 +354,233 @@ function main() {
       name: 'L5 audit 报 0 但退出码 1 → 2', needs: null,
       run: () => runBin(['--audit', '--root', dir], { env: { PATH: `${bin}:${process.env.PATH}` } }),
       expect: (c, o) => c === 2 && o.includes('输出与状态矛盾')
+    })
+  }
+
+
+  // ════ 复审第二轮（security-reviewer）新发现的缺口：每条一个用例，先在 74096ac 上红、再在修复版上绿 ════
+  const goodTimes = { created: '2010-01-01T00:00:00.000Z', ...FIXTURE_TIMES['good-dep'] }
+
+  // H-A：NODE_ENV=production 会让 npm audit 跳过 devDependencies → 必须剔除 NODE_ENV 并显式 --include=dev
+  {
+    const recordFile = join(tmpRoot, 'npm-audit-env.log')
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    const okAudit = { auditReportVersion: 2, vulnerabilities: {}, metadata: { vulnerabilities: { total: 0, info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, dependencies: { total: 2 } } }
+    const bin = makeStub({ npm: { record: recordFile, output: okAudit }, gh: { output: [] } })
+    cases.push({
+      name: 'H-A NODE_ENV=production 不得影响 audit（剔除 NODE_ENV + --include=dev）', needs: null,
+      run: () => runBin(['--audit', '--root', dir], { env: { PATH: `${bin}:${process.env.PATH}`, NODE_ENV: 'production' } }),
+      expect: c => {
+        const recs = readRecords(recordFile)
+        return c === 0 && recs.length > 0 && recs.every(r => r.nodeEnv === null && r.args.includes('--include=dev'))
+      }
+    })
+  }
+
+  // M-1：别名条目按 entry.name 查冷却期，不是锁 key
+  {
+    const recordFile = join(tmpRoot, 'npm-alias.log')
+    const dir = makeRepo({ serverPackages: { 'node_modules/good-dep': goodEntry('good-dep', '1.0.0') } })
+    writeServerLock(dir, {
+      'node_modules/good-dep': goodEntry('good-dep', '1.0.0'),
+      'node_modules/zzz-alias-key': { name: 'left-pad', ...goodEntry('left-pad', '1.3.0') }
+    })
+    const bin = makeStub({ npm: { record: recordFile, output: { created: '2010-01-01T00:00:00.000Z', ...FIXTURE_TIMES['left-pad'] } } })
+    cases.push({
+      name: 'M-1 别名条目：冷却期查 entry.name（left-pad），不查锁 key', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: (c, o) => {
+        const recs = readRecords(recordFile)
+        const queried = recs.map(r => r.args[r.args.indexOf('--') + 1])
+        return c === 0 && queried.length === 1 && queried[0] === 'left-pad' && o.includes('别名 key zzz-alias-key')
+      }
+    })
+  }
+
+  // M-2：新增条目既无 resolved 也无 integrity（且不是 inBundle/link）→ 违规，不能所有断言被跳过
+  {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    writeServerLock(dir, {
+      'node_modules/left-pad': goodEntry('left-pad', '1.3.0'),
+      'node_modules/good-dep': { version: '1.0.0' }
+    })
+    const bin = makeStub({ npm: { output: goodTimes } })
+    cases.push({
+      name: 'M-2 新增条目缺 resolved/integrity → 1（不是退出 0）', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: (c, o) => c === 1 && o.includes('缺 resolved')
+    })
+  }
+
+  // M-3：--audit 遇到空锁 / 残缺锁不得报「0 漏洞」
+  for (const [label, lockText] of [['锁文件是 {}', '{}'], ['packages 为空但 package.json 声明了依赖', JSON.stringify({ name: 'x', lockfileVersion: 3, packages: {} })]]) {
+    const dir = makeRepo({
+      serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') },
+      extraFiles: { 'server/package.json': JSON.stringify({ name: 'fixture-server', version: '0.0.0', dependencies: { 'left-pad': '^1.3.0' } }) }
+    })
+    writeFileSync(join(dir, 'server/package-lock.json'), lockText)
+    const bin = makeStub({ npm: { output: { auditReportVersion: 2, vulnerabilities: {}, metadata: { vulnerabilities: { total: 0, info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, dependencies: { total: 0 } } } }, gh: { output: [] } })
+    cases.push({
+      name: `M-3 --audit ${label} → 2`, needs: null,
+      run: () => runBin(['--audit', '--root', dir], { env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: (c, o) => c === 2 && o.includes('算不出')
+    })
+  }
+
+  // M-4：包名不得以 . / _ 开头（npm 会把 .. 当目录 spec）
+  for (const key of ['node_modules/.', 'node_modules/..', 'node_modules/.hidden']) {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    writeServerLock(dir, {
+      'node_modules/left-pad': goodEntry('left-pad', '1.3.0'),
+      [key]: { version: '1.0.1', resolved: tarball('good-dep', '1.0.1'), integrity: 'sha512-z' }
+    })
+    const recordFile = join(tmpRoot, `npm-m4-${key.replace(/\W/g, '_')}.log`)
+    const bin = makeStub({ npm: { record: recordFile, output: goodTimes } })
+    cases.push({
+      name: `M-4 包名 ${key.slice('node_modules/'.length)} → 2 且 npm 一次都没被调用`, needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: c => { let n = 0; try { n = readRecords(recordFile).length } catch { /* 桩没被调用 = 没日志文件 */ } return c === 2 && n === 0 }
+    })
+  }
+
+  // M-5：npm 子进程显式 --prefix 到自己的空目录（不沿父目录找 .npmrc），diff 与 audit 两条路径都要
+  {
+    const recordFile = join(tmpRoot, 'npm-prefix.log')
+    const dir = makeRepo({ serverPackages: { 'node_modules/good-dep': goodEntry('good-dep', '1.0.0') } })
+    writeServerLock(dir, { 'node_modules/good-dep': goodEntry('good-dep', '1.0.1') })
+    const bin = makeStub({ npm: { record: recordFile, output: goodTimes } })
+    cases.push({
+      name: 'M-5 --diff 的 npm 带 --prefix=<自己的 cwd>', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: c => { const recs = readRecords(recordFile); return c === 0 && recs.length > 0 && recs.every(r => r.args.includes(`--prefix=${r.cwd}`)) }
+    })
+    const recordFile2 = join(tmpRoot, 'npm-prefix-audit.log')
+    const okAudit = { auditReportVersion: 2, vulnerabilities: {}, metadata: { vulnerabilities: { total: 0, info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, dependencies: { total: 2 } } }
+    const bin2 = makeStub({ npm: { record: recordFile2, output: okAudit }, gh: { output: [] } })
+    cases.push({
+      name: 'M-5 --audit 的 npm 带 --prefix=<自己的 cwd>', needs: null,
+      run: () => runBin(['--audit', '--root', dir], { env: { PATH: `${bin2}:${process.env.PATH}` } }),
+      expect: c => { const recs = readRecords(recordFile2); return c === 0 && recs.length > 0 && recs.every(r => r.args.includes(`--prefix=${r.cwd}`)) }
+    })
+  }
+
+  // L-a：GIT_DIR 指向别的仓库不得影响 base 对比
+  {
+    const good = { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') }
+    const tampered = { 'node_modules/left-pad': { ...goodEntry('left-pad', '1.3.0'), integrity: 'sha512-tampered', hasInstallScript: true } }
+    const other = makeRepo({ serverPackages: tampered })
+    const dir = makeRepo({ serverPackages: good })
+    writeServerLock(dir, tampered)
+    cases.push({
+      name: 'L-a GIT_DIR 指向别的仓库（其 HEAD 锁 = 被篡改的锁）→ 仍报违规 1', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { GIT_DIR: join(other, '.git') } }),
+      expect: (c, o) => c === 1 && o.includes('版本没变但 integrity 变了')
+    })
+  }
+
+  // L-b：--root 是仓库子目录时，base 必须按 --root 读，不是按仓库根读
+  {
+    const good = { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') }
+    const tampered = { 'node_modules/left-pad': { ...goodEntry('left-pad', '1.3.0'), integrity: 'sha512-tampered', hasInstallScript: true } }
+    const dir = makeRepo({
+      serverPackages: tampered, // 仓库根的 server/ 恰好等于「被篡改后的样子」
+      extraFiles: {
+        'app/server/package-lock.json': lockJson(good, 'fixture-server'),
+        'app/client/package-lock.json': lockJson({}, 'fixture-client')
+      }
+    })
+    writeFileSync(join(dir, 'app/server/package-lock.json'), lockJson(tampered, 'fixture-server'))
+    cases.push({
+      name: 'L-b --root=<子目录>：base 按 --root 读 → 报违规 1（旧版读仓库根，误报 0）', needs: null,
+      run: () => runBin(['--diff', 'HEAD', '--root', join(dir, 'app')]),
+      expect: (c, o) => c === 1 && o.includes('版本没变但 integrity 变了')
+    })
+  }
+
+  // L-c：--min-age-days 空串不得变成 0；生效阈值要回显
+  cases.push({
+    name: 'L-c1 --min-age-days "" → 2（不是悄悄当 0）', needs: null,
+    run: () => runBin(['--diff', 'HEAD', '--min-age-days', '']),
+    expect: c => c === 2
+  })
+  {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    cases.push({
+      name: 'L-c2 生效的冷却期阈值回显在输出里', needs: null,
+      run: () => runBin(['--diff', 'HEAD', '--min-age-days', '3'], { cwd: dir }),
+      expect: (c, o) => c === 0 && o.includes('冷却期阈值：3 天')
+    })
+  }
+
+  // L-d：版本串 created / modified（time 对象里的非版本键）→ 2
+  for (const weird of ['created', 'modified']) {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    writeServerLock(dir, {
+      'node_modules/left-pad': goodEntry('left-pad', '1.3.0'),
+      'node_modules/good-dep': { version: weird, resolved: tarball('good-dep', weird), integrity: 'sha512-b' }
+    })
+    const bin = makeStub({ npm: { output: { created: '2010-01-01T00:00:00.000Z', modified: '2010-01-01T00:00:00.000Z', ...FIXTURE_TIMES['good-dep'] } } })
+    cases.push({
+      name: `L-d 版本串 ${weird} → 2（不能拿包创建时间过冷却期）`, needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: (c, o) => c === 2 && o.includes('不是合法 semver')
+    })
+  }
+  // H3b：合法 semver 但 time 里没有 → 2（Object.hasOwn 这一层的用例）
+  {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    writeServerLock(dir, {
+      'node_modules/left-pad': goodEntry('left-pad', '1.3.0'),
+      'node_modules/good-dep': goodEntry('good-dep', '9.9.9')
+    })
+    const bin = makeStub({ npm: { output: goodTimes } })
+    cases.push({
+      name: 'H3b 合法 semver 但发布时间表里没有 → 2「查不到」', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { PATH: `${bin}:${process.env.PATH}` } }),
+      expect: (c, o) => c === 2 && o.includes('查不到 good-dep@9.9.9')
+    })
+  }
+
+  // L-e：字段类型/格式校验（三种畸形各一例）
+  for (const [label, entry, want] of [
+    ['version 缺失', { resolved: tarball('good-dep', 'undefined'), integrity: 'sha512-x' }, c => c === 2],
+    ['integrity 是垃圾串 "junk"', { version: '1.0.0', resolved: tarball('good-dep', '1.0.0'), integrity: 'junk' }, (c, o) => c === 1 && o.includes('integrity 缺失或格式不对')],
+    ['hasInstallScript 为 false（npm 只会写 true）', { ...goodEntry('good-dep', '1.0.0'), hasInstallScript: false }, c => c === 2]
+  ]) {
+    const packages = { 'node_modules/good-dep': entry }
+    const dir = makeRepo({ serverPackages: packages }) // base 与工作区相同：只有格式规则能报
+    cases.push({
+      name: `L-e ${label} → 非 0`, needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir }),
+      expect: want
+    })
+  }
+
+  // L-f：gh 调用钉死 github.com，且 GH_HOST / GH_REPO 不进子进程
+  {
+    const ghRecord = join(tmpRoot, 'gh-env.log')
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    const bin = makeStub({
+      npm: { output: { auditReportVersion: 2, vulnerabilities: {}, metadata: { vulnerabilities: { total: 0, info: 0, low: 0, moderate: 0, high: 0, critical: 0 }, dependencies: { total: 2 } } } },
+      gh: { record: ghRecord, output: [] }
+    })
+    cases.push({
+      name: 'L-f gh 带 --hostname github.com，GH_HOST/GH_REPO 被剔除', needs: null,
+      run: () => runBin(['--audit', '--root', dir], { env: { PATH: `${bin}:${process.env.PATH}`, GH_HOST: 'evil.example', GH_REPO: 'evil/repo' } }),
+      expect: c => {
+        const recs = readRecords(ghRecord)
+        return c === 0 && recs.length === 1 && recs[0].args.includes('--hostname') && recs[0].args.includes('github.com') && recs[0].leakedKeys.length === 0
+      }
+    })
+  }
+
+  // L-g：非官方 registry 要有醒目提示
+  {
+    const dir = makeRepo({ serverPackages: { 'node_modules/left-pad': goodEntry('left-pad', '1.3.0') } })
+    cases.push({
+      name: 'L-g LOCK_CHECK_REGISTRY 非官方源 → 输出「非官方 registry」提示', needs: null,
+      run: () => runBin(['--diff', 'HEAD'], { cwd: dir, env: { LOCK_CHECK_REGISTRY: 'https://hostile.example/' } }),
+      expect: (c, o) => c === 0 && o.includes('非官方 registry')
     })
   }
 
