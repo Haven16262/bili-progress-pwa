@@ -11,6 +11,7 @@
 
 **阶段:** 无进行中 Phase。三个插入任务：「每日同步 412 冻结」已发布；「补全删除功能」已审查、前端已在线；**「100% 视频庆祝动效 + 归档 3→7 天」已实现并审查通过放行**（`c78c2a6` 归档 7 天 + `a3a462e` 庆祝动效；审查记录见「本 Phase 历史」[2026-09-21 11:02] 条），**等工作者构建上线（T5）**。本地未 push 的提交（用户 `! git push origin master`）：`bac5b29`、`6824adb`、`3b0dff6`、`9a3fbeb`、`c78c2a6`、`a3a462e` 及其后的 docs 提交。
 **当前任务:** 工作者执行 **T5：构建上线**（`cd client && npm run build`，静态文件按请求读盘，无需 pm2 restart；构建后核对线上 index.html 引用的资源哈希与 `client/dist/assets` 一致）。之后 = 用户在真机/浏览器**肉眼确认**庆祝动效观感（见「未验证的前提」），再 `! git push origin master`。
+**工作者完成状态（2026-09-21 11:03）：** T5 构建上线完成 —— `cd client && npm run build` 绿，生产 index.html 引用的 `index-DdohwUDL.css` / `index-DkmSAcs0.js` 与 `client/dist/assets` 一致且均 200，新 CSS 含 `celebrate-`；**未 push**（待用户真机肉眼确认观感后 `! git push origin master`）。交接见「本 Phase 历史」[11:03] 条。
 **关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
 
 **用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
@@ -24,7 +25,7 @@
 - [x] **T2 庆祝动效（plan 009 Part B）**：`Cylinder3D.vue` + `HomePage.vue` + 新 `client/src/utils/celebrated.js` + `main.css` token（+ `tailwind.config.js` 同步）。（完成标准：plan 009「验证」一节 8 项全过；数字对比度按计划里的判据**实算**并把数字写进交接；单独一个提交）
 - [x] **T3 端到端验证与截图**：按 plan 009「验证」用**假 bvid**（`BV_TEST_CEL_*`）建测试视频，Playwright 跑 8 项；320/375/768/1440 截图存 `/tmp`，路径写进交接；测完清测试视频与 localStorage，库行数回到测试前。（完成标准：交接块写明每项结果 + 库行数前后一致）
 - [x] **T4 构建上线时机**：**先在 vite dev 验证，复审通过后再 `npm run build`**（`client/dist` 即生产，构建=上线；上一轮是复审前就上线了）。若确需先构建，交接里事先申明。**不 push**（守卫硬拒）。
-- [ ] **T5 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（**不带** `--outDir`，这次要写 `client/dist`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，其引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 含 `celebrate-`；**不 push**（守卫硬拒）；交接里写一行结果即可，不必再写完整交接块（按 WORKFLOW 仍需先更新「当前状态」再追加一条简短历史）。
+- [x] **T5 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（**不带** `--outDir`，这次要写 `client/dist`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，其引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 含 `celebrate-`；**不 push**（守卫硬拒）；交接里写一行结果即可，不必再写完整交接块（按 WORKFLOW 仍需先更新「当前状态」再追加一条简短历史）。
 
 **未验证的前提:**（2026-09-21 11:02 复审后）
 - **已验证**：`.progress-text` 真实字号 12px（工作者实测，390/1440 两宽一致，与全局者判断相符）；光环在手机横滚容器里确实被裁（工作者实测 200×300 原尺寸：上溢 36.6px、左右各 30px、320 宽还撑出横向滚动）→ 已按计划缩至 92% 并给 `.home-grid-scroll` 加 padding+等量负 margin，四宽实测可见环带 0 裁切、页面级无横向溢出；全局者本侧另看了 375/320 两张实机截图（静态与庆祝中），无硬边裁切；数字底色对比度（中列 3.06 起，全局者与工作者独立算出同一张表）；`server` 干净 shell 46 例全绿（全局者本侧重跑）；归档 7 天两条路径边界用例先红后绿（工作者报告 + 全局者读用例）。
@@ -141,3 +142,13 @@
 **发布决定：放行** `c78c2a6`、`a3a462e`。授权工作者执行 T5（构建上线）。push 仍被守卫硬拒 → 用户 `! git push origin master`。
 
 **移交：** 工作者 T5（构建 + 线上哈希核对）→ 用户肉眼验收 → 用户 push。plan 009 状态已置 DONE（实现+审查通过；上线以 T5 完成为准）。
+
+## [2026-09-21 11:03] 工作者 — T5 构建上线完成
+
+**完成情况：** `cd client && npm run build`（不带 `--outDir`，写入 `client/dist`）**绿** —— `dist/assets/index-DdohwUDL.css`（45.80 kB）+ `index-DkmSAcs0.js`（120.96 kB）；curl 生产 `127.0.0.1:3000` 的 index.html，引用哈希与 `client/dist/assets` **逐字一致**；两个资源均 HTTP 200；新 CSS `grep -c "celebrate-"` = 1（庆祝 token 已上线）。**未 push**。
+**为验收留下的预览行**：库里新增一条假 bvid `BV_TEST_CEL_PREVIEW`（标题「庆祝动效预览 · 看完可用红按钮删除」，progress 100）——当前真库没有任何 100% 视频，用户在手机上无法直接看到庆祝动效，故留此行供肉眼验收；用户看完可用首页删除按钮自行删掉（或让工作者清理）。该 bvid 永不出现在 B站 历史里，同步不会碰它，留着无害。
+**观察（既有行为，非本轮引入）**：旧资源路径（如 `/assets/index-CwKkmMT3.js`）现在返回 SPA 兜底 HTML（200 + `text/html`，不是旧 JS）——缓存着旧 index.html 的客户端会走到这一步，PWA `autoUpdate` 下次加载即更新，与 2026-09-03 轮同一机制。
+**任务进度：** - [x] T5 构建上线
+**关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：无（此前的「库 11→10」疑虑已由用户在全局者侧确认闭环：是用户用新删除功能删掉那条意外视频）。
+
+**顺带变动：** 按工作者写入流程第一步，已在「当前状态」勾选 T5 并加一行完成状态；未改动全局者正文。
