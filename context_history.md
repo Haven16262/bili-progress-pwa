@@ -1366,3 +1366,92 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **升级判定（判断）：** 纯脚本 + 文档、不动依赖、不涉及认证/密钥/并发/不可逆操作，交工作者；脚本会调用 `npm`/`gh`（外部命令与网络），复审时我会按规则过安全预检。
 
 **移交工作者：** T1 → T2 → T3 → T4 → T5。交接块请附：T3 六项回归的实际退出码、「所有退出 0 路径」清单、T4 的实测结论。
+
+## [2026-09-21 11:47] 工作者 — Dependabot 依赖清理完成（两锁文件 audit 0，未重启/未 push）
+
+**完成情况：**
+- **T1（临时目录验证，`/tmp/bili-dep-scratch/server/`）**：只含 package.json / package-lock.json / src / tests / vitest.config.js（**无 data.db、.env、node_modules**）。`npm ci` 走通（含 better-sqlite3 prebuild 下载）→ 更新 → `env -i` 全量 **46 例全绿** → `npm audit` **0** → `npm ls` 无 ERR/missing/invalid ✓
+- **T2（真实目录）**：把验证过的锁文件拷回 `server/` → `npm ci`（169 包，audit 0）→ `node -e` 打开 `:memory:` 库确认 **better-sqlite3 11.10.0 加载正常**（建表/插入/查询通过）→ `env -i` **46 例全绿** → audit 0。**未 `pm2 restart`**（生产 `127.0.0.1:3000/api/ping` 全程 200）→ **需用户 `! pm2 restart bili` 才在运行进程生效**。
+- **T3（客户端）**：`npm audit fix`（**不加 `--force`**）→ **0 漏洞**（changed 28 packages）→ `npm ls` 无 ERR/missing/invalid → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir` **绿**。产物与现 `client/dist` **同名哈希、同字节数**：JS 120965 B、CSS 45874 B（**+0.00%**）→ 确认这些包不进浏览器产物，**未重建生产 dist**。
+- **T4（锁文件 diff 三断言；脚本 `/tmp/bili-dep-scratch/lockdiff.py`，未进仓库）**：
+  - **server**：版本变化 **17** / 新增 **0** / 移除 **1**。变化 = `express 4.22.1→4.22.3`、`qs 6.14.2→6.16.0`、`body-parser 1.20.5→1.20.8`、`ip-address 10.2.0→10.7.2`、`vitest` 与 `@vitest/{expect,mocker,pretty-format,runner,snapshot,spy,utils} 4.1.9→4.1.11`、`postcss 8.5.16→8.5.28`、`nanoid 3.3.15→3.3.19`、`side-channel 1.1.0→1.1.1`、`tinyrainbow 3.1.0→3.1.1`、`@jridgewell/sourcemap-codec 1.5.5→1.6.0`；移除 = `body-parser/node_modules/qs`（嵌套旧副本，已 dedupe 到顶层 6.16.0）。
+  - **client**：版本变化 **28** / 新增 **0** / 移除 **0**。变化 = `nanoid 3.3.11→3.3.19`、`postcss 8.5.12→8.5.28`、`fast-uri 3.1.2→3.1.8`、`brace-expansion 5.0.6→5.0.12`（另一份嵌套 `2.1.0→2.1.7`）、`browserslist 4.28.2→4.29.0`、`baseline-browser-mapping 2.10.24→2.11.25`、`@babel/core 7.29.0→7.29.7` 及 `@babel/*` 家族、`postcss-selector-parser 6.1.2→6.1.4`、`caniuse-lite`、`electron-to-chromium`、`node-releases`、`update-browserslist-db`。
+  - **① resolved 全为 `registry.npmjs.org`：✅** ｜ **② 新增包里 `hasInstallScript`：0 个（两份锁文件都零新增包）：✅** ｜ **③ 涉及包名逐一对照分诊文档 14 包及传递依赖：✅**（server 侧多出的 `express` 即文档指定的承载路径；`nanoid` 是 postcss 的依赖、`side-channel` 是 qs 的依赖、`tinyrainbow`/`@jridgewell/sourcemap-codec`/`@vitest/*` 是 vitest 的依赖，均属传递依赖）。
+- **T5**：提交 `05729f6`（server 锁文件，80+/94−）与 `9083ae6`（client 锁文件，128+/125−）；`git diff --stat -- server/package.json client/package.json` **无输出**（逐字节未改）；**未 push**。
+- **环境备注（分诊文档未记全，实测补充）**：npm **10.9.8** 上 server 侧 `npm audit fix` **与** `npm update <含 vitest 的多个包>` 都会崩在同一处 arborist `loadPeerSet`（`Cannot read properties of null (reading 'edgesOut')`），崩点由 `vitest@4.1.11` 的 peer 图触发。可行绕法：① `npm update <包名>` **逐个**更新（express / ip-address / body-parser / postcss 都不崩）；② vitest 一步加 **`--legacy-peer-deps`**（只改 peer 解析；本锁文件上结果是纯版本提升，见 T4 断言①③）。
+- **回滚材料**：旧锁文件备份 `/tmp/bili-dep-scratch/{server,client}-package-lock.json.orig`（git 历史里同样可取）。
+
+**任务进度：** - [x] T1 - [x] T2 - [x] T3 - [x] T4 - [x] T5
+
+**关键决策点：**
+- 架构/接口变动：无（仅两份锁文件；`package.json` 未动）。
+- 安全相关：**依赖更新本身** —— 28 个告警涉及包全部升到修复版本（或更高，仍在范围内）；零新增依赖、零 install script、resolved 全为官方 registry。可达性判断见分诊文档（这些告警在本应用代码路径不可达）。认证/密钥/用户输入/SQL/文件路径/外部请求：无变化。
+- 偏离原计划：① vitest 一步改用 `--legacy-peer-deps` 绕过 npm 崩溃（分诊只建议「按名字 update」，实测不够）；② `ip-address` 落到 10.7.2（文档预期 10.3.1）、server `postcss` 落到 8.5.28（文档预期 8.5.23）——都在原范围内、都是更新版本，无风险差异。
+- 未解决的疑虑：
+  1. `--legacy-peer-deps` 只影响这一次 resolution；以后常规 `npm install` 会按正常 peer 规则重算依赖树，届时解析结果可能又变（无实际影响，锁文件为准）——仅备注。
+  2. 告警是否真关闭 = **push 后** GitHub 重扫（有几分钟延迟）；本地代理指标（两份 `npm audit` 0）已达标，验收标准以 push 后的 API 读数为准。
+  3. better-sqlite3 未动版本（11.10.0），但 `npm ci` 重装过它：已实测 `:memory:` 加载正常 + 测试全绿；生产进程要重启后才会用新装的副本（启动脚本的 ABI 自愈兜底仍在）。
+
+**顺带变动：** 已按工作者写入流程第一步勾选 T1–T5 并加完成状态行；未改动全局者正文。
+
+## [2026-09-21 12:15] 工作者 — 依赖冷却期 + 体检脚本：实现 + 自测 + T4 实测完成
+
+**完成情况：**
+- **交付物（commit `d8b6ca2`，2 文件 356+）**：`scripts/lock-check.mjs`（`--diff` / `--audit`）与 `docs/dependency-policy.md`。**未 push**；无依赖变化、`package.json` 未动。
+- **T3 自测（按「写检查脚本」纪律）**：
+  - **(a) 返回 0 的路径逐条确认**：
+    - `--diff` 只有一条 0 路径（`violations.length === 0` 且全程无 CannotCompute），其必经：① ref 与两份锁文件都成功读到并解析（`git show` 成功、文件存在、有 `packages` 段）——否则 2；② 每个「变动/新增」项都过了内容断言（`resolved` 官方源、有 `resolved` 必有 `integrity`、无新增 install script）——否则 1；③ 每个变动项都取到了发布时间（`npm view <包名> time` 成功且该版本在 `time` 里）——否则 2；④ 每个变动项 age ≥ N 或进了 `--allow`——否则 1。**没有「跳过检查仍返回 0」的分支**；0 变动时第 ②-④ 步的循环为空集（真空成立），且输出仍报范围与计数（不输出「没有新东西」）。
+    - `--audit` 只有一条 0 路径，其必经三处真跑：server `npm audit` ✓ + client `npm audit` ✓ + `gh api` 查询 ✓（任一失败/输出不可解析 → 2），且两处漏洞数都为 0、open 告警为 0。
+  - **(b) 不会永远报警**：现状 `--audit` → **退出 0**（server 198 包 / client 459 包，漏洞 0，GitHub open 告警 0）✓
+  - **(c) 确定性回归 9 项，全部符合预期**：
+
+    | 命令 | 期望 | 实测 |
+    |---|---|---|
+    | `--diff d6df3c7 --min-age-days 0` | 0 | **0**（45 个变动包，最年轻 2.6 天） |
+    | `--diff d6df3c7 --min-age-days 3650` | 1 | **1**（45 项违规，逐条列出） |
+    | `--diff no-such-ref-0921` | 2 | **2**（`git show` exit 128） |
+    | `npm_config_registry=http://127.0.0.1:9 --diff d6df3c7` | 2 | **2**（ECONNREFUSED） |
+    | `--audit --root <d6df3c7 旧锁文件临时目录>` | 1 且漏洞 >0 | **1**（15 个 = server 7 + client 8，与清理前一致） |
+    | `PATH` 去掉 gh 后 `--audit` | 2 且明说未查 | **2**（「算不出：GitHub 告警未查：gh 无法执行（ENOENT）」） |
+    | `npm_config_registry=… --audit`（联网失败不许给 0） | 2 | **2** |
+    | `--audit`（现状） | 0 | **0** |
+    | `--diff d6df3c7 --allow electron-to-chromium@1.5.433` | 1，放行 1、违规减一 | **1**（违规 8 / 放行 1，末行清单含该版本与天数） |
+
+  - 触发点 (a) 演练：`--diff 'd8b6ca2^'`（本任务未改锁文件）→ **0 变动包、退出 0**，末行 `查了 0 个变动包（server 0 / client 0），范围 d8b6ca2^..工作区，最年轻 — 天，违规 0 项，放行 0 项：无` ✓（0 变动时「最年轻」显示 `—`，已在文档说明）
+- **T4（`--before` 实测；临时目录只拷 package.json + package-lock.json，无 data.db/.env/node_modules）**：
+  - **能用**：`npm update express --package-lock-only --before=2026-09-10T00:00:00Z` → express **4.22.2**（发布 2026-05-11）；**不带 `--before` 的对照** → **4.22.3**（发布 **2026-09-14**，在截止线之后，被正确挡掉）；截止线推到 4.22.2 发布前（`--before=2026-05-10`）→ express **停在 4.22.1**。
+  - **边界（已写进文档）**：① `--before` 只过滤「可选版本」，**不越过 `package.json` 范围**——同一截止线下 `qs` 停在 `~6.15.1` 内最高的 6.15.3（6.16.0 虽发布在截止线之前，也不在范围内）；② **不带包名的整树 `npm update --before=…` 仍撞 npm 的 arborist bug**（`edgesOut`；实测锁文件无残留改动）；③ 它是**事前**手段，事后关卡仍是 `--diff`——两者都保留。
+- **T5**：`docs/dependency-policy.md` 含 ① 冷却期规则与例外四条件（含「N 调大 → 例外更频繁」的成本提醒）② 更新操作方式（`--before` 用法表 + 本项目 npm 坑的**指针**，指向 `docs/dependabot-triage-2026-09-21.md` 不复制）③ 三个触发点（工作者 / 全局者 / 周期体检）④ 脚本用法、退出码、末行固定格式 + 自测记录表。
+
+**任务进度：** - [x] T1 - [x] T2 - [x] T3 - [x] T4 - [x] T5
+
+**关键决策点：**
+- 架构/接口变动：新增 `scripts/`（仓库首个）与 `scripts/lock-check.mjs`、`docs/dependency-policy.md`；无依赖变化、无接口变化。
+- 安全相关：**检查脚本本身** —— 不新增网络面（复用既有 npm/gh 命令与官方 registry；`gh` 只读本项目告警）；`--diff` 四类断言覆盖供应链常见改动（源 / 完整性 / 安装脚本 / 新版本冷静期）；`--audit` 对任何「查不到」一律非零退出，**不 fail-open**（`npm audit` 空输出不当 0、gh 不可用明说未查）。认证/密钥/用户输入/SQL/文件路径：无。
+- 偏离原计划：① 额外补了两个用例（`--audit` 联网失败、`--allow` 放行路径）——都属纪律条文直接要求覆盖的成功/失败路径；② 0 变动时「最年轻」显示 `—`（空集无最年轻）并在文档说明；③ 文档里写明「对 d6df3c7 跑 `--diff --min-age-days 7` 会报 8 个未满 7 天的历史包」的原因（清理先于本策略），避免未来误读为缺陷。
+- 未解决的疑虑：
+  1. `--before` 对「**新引入的传递依赖**」是否同样过滤**未实测**（本次没出现该场景：express 4.22.2 的依赖都在范围与截止线内）。文档已把结论限定为「按包名 update 的版本选择」。
+  2. 周期触发点 (c) 是**弱触发点**（靠全局者会话读 `context.md` 的「依赖体检记录」行，不是脚本强制）；文档如实标注。
+  3. `--diff` 的「变动包」= 版本变化 + 新增，**移除只在明细里报告**（按任务要求实现）；若将来认为「移除」也需要断言（例如移除伴随 integrity 丢失），需要扩展脚本——当前无此需求。
+
+**顺带变动：** 已按工作者写入流程第一步勾选 T1–T5 并加完成状态行；未改动全局者正文。
+
+## [2026-09-21 12:26] 全局者 — 复审：lock-check.mjs 安全审查不通过，打回修复（4 HIGH）
+
+**背景：** 工作者交接块（[2026-09-21 12:15] 条）交付 `scripts/lock-check.mjs` + `docs/dependency-policy.md`（`d8b6ca2`）。旧条：[12:09] 全局者（本任务决策）已归档 `context_history.md`。
+
+**审查动作：**
+- 安全预检 `security-scan.sh 419db72`：命中 8 处（`spawn`/`https://`，脚本会执行外部命令）→ 必审。全局者**通读了全部 253 行**并自跑了一部分回归；同时 invoke `security-reviewer`（只读，在临时仓库里用真实 npm/git/node 实测）。
+- **全局者自己通读时只发现了一个问题**（锁 key 做的包名直接传给 `npm view`，可注入 npm 选项）；**漏掉了 H1–H4**——是独立审查抓到的。如实记录：一个人读代码不够，检查脚本这类「自己就是防线」的东西必须有独立的对抗式审查。
+- **全局者独立复现了 H1 与 H3**（临时 git 仓库）：H1 同版本 `left-pad` 把 `resolved` 换成 `git+ssh://git@evil.example/x.git#deadbeef`、`integrity` 改掉、加 `hasInstallScript:true` → 「查了 0 个变动包 … 违规 0 项」退出 **0**；H3 版本号取 `constructor` → 「最年轻 **NaN** 天 … 违规 0 项」退出 **0**。
+- 全局者自跑并**与工作者报告一致**的回归：`--audit`（0）、`--diff d6df3c7 --min-age-days 0`（0）、`--min-age-days 3650`（1）、不存在的 ref（2）、`npm_config_registry` 模拟联网失败（2）、gh 不在 PATH（2，明说「GitHub 告警未查」）。**也就是说：工作者自测的那些项确实成立——问题不在这些，而在「什么算变动」的定义太窄。**
+
+**审查结论（security-reviewer）：不可放行。** 4 HIGH（H1 同版本换内容不查；H2 `resolved` 与 name/version 未绑定，冷却期可查错对象；H3 原型键得 NaN 仍放行；H4 npm 配置可被 cwd 的 `.npmrc`/环境变量劫持）、2 MEDIUM（M1 异常退出码语义错；M2 包名注入 npm 选项）、L1–L5。详见 `plans/dep-audit/lock-check-fixes.md`。
+
+**对工作者自测的评价（不是指责，是记录教训）：** 「列出所有返回 0 的路径并逐条确认」这条纪律它执行得很认真、结论自洽——`--diff` 只有一条 0 路径且必经三步检查。**问题出在：这条纪律只保证「走到 0 的路径上检查都做了」，不保证「检查的对象定义得对」**。H1 就是「变动包 = 版本变化 + 新增」这个定义本身漏了「同版本换内容」。今后写这类检查的验收清单时，除了「所有成功路径」，还要加一问：**「有哪些改动会绕过『被检查对象』的定义，却仍能让锁文件变坏？」**（已写进修复规格的自测要求：用对抗样本而不是只用真实历史。）
+
+**决策：** 打回工作者修复（T1–T4），**不由全局者直接实现**——这是第 1 次打回，未触发「≥2 次转全局者」；规格已给到正则与写法级别。自测要求升级为「可重复运行 + 证明不是永远绿」。
+
+**升级判定（判断）：** 若修复后再次被审查打回，按 WORKFLOW 转全局者直接实现。
+
+**移交工作者：** T1 → T2 → T3 → T4。交接块必须附：每缺陷「旧版红 / 修复版绿」输出、自测末行、「故意改坏自测会红」的证据。

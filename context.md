@@ -9,23 +9,17 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。任务「依赖冷却期 + 依赖体检脚本」：工作者已交付（`d8b6ca2`：`scripts/lock-check.mjs` + `docs/dependency-policy.md`），**全局者复审：安全审查不通过，打回修复**（审查记录见「本 Phase 历史」[2026-09-21 12:26] 条）。这是该模块**第 1 次被打回**（WORKFLOW「触发式升级」：同一模块 ≥2 次打回 → 转全局者直接实现）。
-**当前任务:** 按 `plans/dep-audit/lock-check-fixes.md` 修复 `scripts/lock-check.mjs`：**4 个 HIGH（H1–H4，都是「报绿但其实没查」）+ 2 个 MEDIUM + 若干 LOW**，并新增一个**可重复运行的自测** `scripts/lock-check.selftest.mjs`。**不改依赖 / `package.json` / 锁文件、不 push、不引入第三方依赖。**
-**关键依据文档（先读，含每条缺陷的现象/修法/用例、审查者与全局者各自实测了什么）:** `plans/dep-audit/lock-check-fixes.md`；背景与原任务见 `docs/dependency-policy.md`、`plans/dep-audit/lockcheck-draft.mjs`。
+**阶段:** 无进行中 Phase。任务「依赖冷却期 + 依赖体检脚本」**已完成待用户 push**：`scripts/lock-check.mjs` 经两轮独立安全审查（第 1 轮打回 4 HIGH；第 2 轮又发现 1 HIGH + 5 MEDIUM），**第 2 轮的修复按「触发式升级」由全局者直接实现**（同一模块第 2 次被打回），自测 **47/47**，同一套用例拿第 1 轮修复版 `74096ac` 跑是 26/47（新增 21 项全红）。详见「本 Phase 历史」[2026-09-21 15:09] 全局者条。
+**当前任务:** 无待办给工作者。用户 `! git push origin master` 后本轮收尾。
+**校准要求（判断）：** 第 2 轮修复**只经全局者自验，未再经独立复审**（每个缺口都在旧版上真实复现、在新版上确认修好，但没有第三次对抗式审查）。所以**下一次真实使用**（有人改锁文件、需要跑 `--diff` 时）全局者要**并行手工解析锁文件比对一次**；两者一致才撤销此要求，不一致按缺陷处理。
+**未提交的工作者改动：** 无（本次提交把工作者交接块、我的修复与文档一并入库）。
 
-**⚠️ 过渡期规则（全局者定）：** 在修复通过审查前，**`lock-check.mjs` 的退出 0 不能单独作为放行依据**——已被独立复现的两个反例：同版本把 `resolved` 换成 `git+ssh://evil…` 并加 `hasInstallScript`，脚本仍报「0 个变动包、退出 0」（H1）；版本号取 `constructor` 时报「最年轻 NaN 天、违规 0」也退出 0（H3）。此期间涉及锁文件的审查，全局者仍自己解析锁文件 JSON 比对（Dependabot 复审时用的方法）。
+**本轮未做 / 留待：** GitHub Actions / Dependabot 自动 PR；pitstop「项目依赖」域与工作流 `docs/` 模块（草稿在 `/root/workspace/drafts/`，用户另开 session）；`--allow` 只跳过冷却期、不校验放行名单是否在允许集合内（工作者交接提到的未解决疑虑，未收紧）；`lock-check.mjs` 不下载 tarball 验哈希、不验签名（文档「限制」已写明）；下次依赖体检约 2026-10-21。
 
-**任务清单(给工作者):**
-- [ ] **T1 修复 `scripts/lock-check.mjs`**：H1（每个条目都查，同版本变 resolved/integrity/hasInstallScript = 违规）、H2（`resolved` 与 name/version 绑定）、H3（`Object.hasOwn` + `Number.isFinite`，否则退出 2）、H4（npm 子进程隔离：固定 registry、空 userconfig/globalconfig、清 `npm_config_*`、受控 cwd，生效的 registry 回显在输出里；**注意**原「联网失败」用例靠 `npm_config_registry` 模拟，修完会失效，须换成显式的、仅供测试的 `LOCK_CHECK_REGISTRY` 之类）、M1（任何非 `CannotCompute` 异常也退出 2）、M2（包名正则校验 + `['view','--json','--',name,'time']`；光加 `--` 不够）、L1（ref 以 `-` 开头拒绝 + 先解析成 SHA）、L2（去 `--paginate`，≥100 按违规）、L5（`total==0` 但 `npm audit` 退出码非 0 → 退出 2）。**每条的具体修法、正则、用例见 `plans/dep-audit/lock-check-fixes.md`，照做，别自行改写正则。**（完成标准：对每个能在旧版复现的缺陷，**先在未修复的 `d8b6ca2` 版上跑出「报绿」的证据，再在修复版上跑出预期退出码**，两组输出都写进交接）
-- [ ] **T2 可重复运行的自测 `scripts/lock-check.selftest.mjs`**：只用 node 内置模块；在**临时目录**用 `git init` 造小仓库 + 伪造锁文件逐项调用 `lock-check.mjs` 并比对退出码；末行固定格式 `跑了 <N> 项，通过 <p>，失败 <f>，需联网但联网失败 <n>`；**有失败或联网失败即非零退出**（联网失败不许算通过）；包含原来 9 项确定性回归 + H1–H4/M1/M2/L1/L2/L5 每个用例；跑完清理临时目录，**不写真实仓库任何文件**。（完成标准：自测全绿；再**故意把修复版里的某一处改坏**（如去掉 H1 的同版本比对）确认自测会红，然后还原——证明自测不是永远绿）
-- [ ] **T3 更新 `docs/dependency-policy.md`**：补「威胁模型」与「限制」（L3：`hasInstallScript` 只对诚实 npm 产出的锁有意义）、更新自测表、替换 `npm_config_registry` 的用法、写明 H2 选「违规」还是「算不出」。
-- [ ] **T4 提交**：分**两个提交**——① 修复 + 文档 ② 自测（`git add <明确路径>` + `git commit -- <同路径>`），**不 push**。交接块附：每个缺陷的「旧版红 / 修复版绿」输出、自测末行、「故意改坏自测会红」的证据。
-
-**未验证的前提:**（2026-09-21 12:26）
-- **已核实（全局者独立复现）**：H1、H3。**审查者实测、全局者未重复**：H2、H4、M1、M2、L1。**推断未验证**：L2、L3、L5、`--userconfig=/dev/null` 是否会让 npm 报错。
-- **判断**：威胁模型——`--diff` 手跑、无 CI，「不可信 PR 的锁文件」是次要场景；但 H1–H4 不依赖网络劫持，是结构性缺口，仍必须修。
-- **判断**：H2 修成「违规」还是「算不出」都可接受，由工作者选并写进文档，但**不许放行**。
-- **本轮不做**：GitHub Actions、Dependabot 自动 PR、改 pitstop、改 `/as-overseer` 模板。
+**已核实 / 判断 / 未验证（本轮收尾）:**
+- **已核实**：第 2 轮 21 个缺口的自测在 `74096ac` 上全红、在修复版上全绿（47/47）；`NODE_ENV=production` 下 `--audit` 旧版对含 critical 漏洞的锁报「漏洞 0 个」退出 0、新版报 2 个退出 1；`TMPDIR` 祖先放 `package.json`+`.npmrc` 时旧版 `--diff` 命中假 registry（1 次）并退出 0、新版 0 次命中并退出 2；包名 `..` 旧版退出 0、新版退出 2；真实仓库 `--diff HEAD` 对全部 659 个条目 0 违规（新规则没有对真实锁误报）。
+- **判断**：威胁模型仍是「人在本机手跑、无 CI」；别名缺口当前两份真实锁里 0 个条目，但会挡住下一次动 `@isaacs/cliui` 一类依赖的更新，所以本轮修。
+- **未验证**：`GH_HOST`/`GH_REPO`、`GIT_DIR` 的旧版危害只按审查者复现 + 自测（旧版红）确认，未对真实 gh 另做实机验证；第 2 轮修复的独立复审（见上）。
 
 **backlog（下次开 Phase 顺手项，非紧急）:**
 - 【2026-09-21 新增·既有行为】`server/src/index.js` 第 98–101 行的**全局错误处理器把所有错误一律返回 500**：body-parser 抛的 413（请求体过大）、畸形 JSON 的 400 等本应是 4xx 的错误，客户端看到的都是 500 且日志里报 `[error]`。**不是本轮引入**（本轮 `src` 零改动，全局者用新依赖起临时实例实测：超 1MB 请求体确实被拒，但返回 500）。低优先，安全上无影响（限制仍然有效、不泄露栈信息）；若要修：处理器里尊重 `err.status`/`err.statusCode`（4xx 原样返回，仅 5xx 统一成「服务器内部错误」）
@@ -59,7 +53,7 @@
 - **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出。**「视觉语言翻新」轮（2026-09-03）确认：只换杯壁材质/配色，wave rotate 动画本身不动。**
 - **当前视觉语言 = 液体玻璃（2026-09-03 起，用户经 /design 三方案选定，取代旧「深色仪表盘」）**：token 全在 `client/src/assets/styles/main.css` 的 `:root`（`--glass-*` 面板/导航/按钮、`--bg-blob-*` 背景网格、`--liquid-*-bloom` 杯子晕染、`--font-display`=Manrope、`--color-text-on-glass`），`tailwind.config.js` 同步。硬约束（后续轮沿用）：① `backdrop-filter` blur ≤20px、只用在卡片/面板/导航/弹窗/按钮，**杯子只用 radial 晕染不加 backdrop-filter**，每处必须配 `@supports not (backdrop-filter...)` 回退到不透明 `--color-surface`（`#1d1d31`）；② `--color-accent`（纯青）保留用于 `focus-visible` outline / nav-active / slider / 语义反馈——focus 可见性是 a11y 硬要求，不因玻璃美学丢；③ BottomNav 是浮起玻璃胶囊（`fixed` + `left/right:16px` + `bottom:18px`，桌面 `@media(min-width:769px)` 加 `max-width:420px`+`margin-inline:auto`），底部留白由 `App.vue` 的 `main` 统一（`pb-[calc(6.5rem+env(safe-area-inset-bottom))]`），两页面自身不再设 `padding-bottom`；④ 正文文字须过 WCAG AA（判定用声明色静态模型，渲染像素实测有抗锯齿稀释偏差）。Google Fonts 两域已在 `server/src/index.js` helmet CSP 放行（style-src fonts.googleapis.com / font-src fonts.gstatic.com）。
 - **100% 庆祝动效 = A+C 紫光（用户定版，2026-09-21，规格见 `plans/009-celebrate-100.md`）**：首页 `progress>=100` 的杯子，数字淡紫渐变（**16px，静态无柔光，只留深紫描边**）+ 杯外紫色光环/亮弧；每视频每设备首次播一次（localStorage `celebrated_100_ids`），之后静态，桌面悬停重放；时长 **3.6s** 由 `main.css` 的 `--duration-celebrate` 控制，**改它要同步 `Cylinder3D.vue` 的 `CELEBRATION_MS`**；reduced-motion 下不播只留静态终态；设置页不做。**用户明确否决过彩虹（与紫色玻璃液体违和）和白光（单调）**——后续 UI 轮不得改回。100% 视频首页保留 **7 个日历日**（`sync.js` 的 `ARCHIVE_AFTER_DAYS`）。数字对比度现状（低于 AA 4.5:1，既有状态）见 backlog。
-- **依赖更新纪律（2026-09-21 定；脚本与操作方式见 `docs/dependency-policy.md`，任务落地前以本条为准）**：① **冷却期 N=7 天**：更新引入的每个新版本须发布满 7 天；**例外仅限告警驱动的安全修复**（须 `npm audit signatures` 通过 + 维护者列表未变 + 交接里逐条写明，脚本用 `--allow` 放行）。② **只提交锁文件**，`package.json` 的版本范围不动，除非用户批准；服务端依赖变了须用户 `! pm2 restart bili`；client 的构建期依赖不进浏览器产物，不必重建 `client/dist`。③ **触发点**：工作者改锁文件后交接前、全局者审查触及锁文件的 diff 时，都跑 `node scripts/lock-check.mjs --diff <base>`；周期体检 = 全局者**开新任务前**若下面的日期距今 >30 天，先跑 `node scripts/lock-check.mjs --audit`（脚本落地前用 `npm audit` + `gh api .../dependabot/alerts?state=open` 手查）。④ **依赖体检记录（全局者每次体检后更新这一行）：上次 2026-09-21，GitHub open=0，两份锁文件 `npm audit` 均 0。** ⑤ **过渡期（2026-09-21）**：`lock-check.mjs` 未通过安全审查（4 HIGH，见 `plans/dep-audit/lock-check-fixes.md`），修复通过前**退出 0 不能单独作为放行依据**，全局者仍自己解析锁文件比对。
+- **依赖更新纪律（2026-09-21 定；脚本与操作方式见 `docs/dependency-policy.md`，任务落地前以本条为准）**：① **冷却期 N=7 天**：更新引入的每个新版本须发布满 7 天；**例外仅限告警驱动的安全修复**（须 `npm audit signatures` 通过 + 维护者列表未变 + 交接里逐条写明，脚本用 `--allow` 放行）。② **只提交锁文件**，`package.json` 的版本范围不动，除非用户批准；服务端依赖变了须用户 `! pm2 restart bili`；client 的构建期依赖不进浏览器产物，不必重建 `client/dist`。③ **触发点**：工作者改锁文件后交接前、全局者审查触及锁文件的 diff 时，都跑 `node scripts/lock-check.mjs --diff <base>`；周期体检 = 全局者**开新任务前**若下面的日期距今 >30 天，先跑 `node scripts/lock-check.mjs --audit`（脚本落地前用 `npm audit` + `gh api .../dependabot/alerts?state=open` 手查）。④ **依赖体检记录（全局者每次体检后更新这一行）：上次 2026-09-21，GitHub open=0，两份锁文件 `npm audit` 均 0。** ⑤ **校准期（2026-09-21）**：`lock-check.mjs` 已修完两轮审查缺口，但第 2 轮修复未经独立复审；**下一次真实使用它时，全局者并行手工解析锁文件 JSON 比对一次**，两者一致再撤销本条；不一致按缺陷处理。
 - **B站 图片必须 CORS 加载（2026-07-07 M2 教训）**：Chrome ORB 会拦截跨域 no-cors `<img>`（ERR_BLOCKED_BY_ORB，且报错只在网络层，DOM 只见裂图）。任何加载 B站 封面（`*.hdslb.com`/`*.bilibili.com`）的 `<img>` 都必须带 `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`；CSP imgSrc 已含两域。首次误判为 CSP 问题，排查靠 Playwright 监听网络层
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **测试封闭性（2026-07-07 教训）**：测试必须在干净 shell 里可复现，不得依赖会话环境变量——工作者曾报「29 例全绿」实为其 shell 恰好导出了 JWT_SECRET，干净环境下新用例全被跳过。所需变量一律在 `server/vitest.config.js` 的 `test.env` 注入（现有 `TEST_DB=':memory:'` + 测试专用 JWT_SECRET）；**数据库隔离靠 TEST_DB，`NODE_ENV=test` 不隔离任何东西**。交接报测试结果前先在干净环境跑一遍
@@ -72,91 +66,59 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-21 11:47] 工作者 — Dependabot 依赖清理完成（两锁文件 audit 0，未重启/未 push）
+## [2026-09-21 13:01] 工作者 — lock-check.mjs 修复完成（4 HIGH + 2 MEDIUM + LOW）+ 可重复自测
 
-**完成情况：**
-- **T1（临时目录验证，`/tmp/bili-dep-scratch/server/`）**：只含 package.json / package-lock.json / src / tests / vitest.config.js（**无 data.db、.env、node_modules**）。`npm ci` 走通（含 better-sqlite3 prebuild 下载）→ 更新 → `env -i` 全量 **46 例全绿** → `npm audit` **0** → `npm ls` 无 ERR/missing/invalid ✓
-- **T2（真实目录）**：把验证过的锁文件拷回 `server/` → `npm ci`（169 包，audit 0）→ `node -e` 打开 `:memory:` 库确认 **better-sqlite3 11.10.0 加载正常**（建表/插入/查询通过）→ `env -i` **46 例全绿** → audit 0。**未 `pm2 restart`**（生产 `127.0.0.1:3000/api/ping` 全程 200）→ **需用户 `! pm2 restart bili` 才在运行进程生效**。
-- **T3（客户端）**：`npm audit fix`（**不加 `--force`**）→ **0 漏洞**（changed 28 packages）→ `npm ls` 无 ERR/missing/invalid → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir` **绿**。产物与现 `client/dist` **同名哈希、同字节数**：JS 120965 B、CSS 45874 B（**+0.00%**）→ 确认这些包不进浏览器产物，**未重建生产 dist**。
-- **T4（锁文件 diff 三断言；脚本 `/tmp/bili-dep-scratch/lockdiff.py`，未进仓库）**：
-  - **server**：版本变化 **17** / 新增 **0** / 移除 **1**。变化 = `express 4.22.1→4.22.3`、`qs 6.14.2→6.16.0`、`body-parser 1.20.5→1.20.8`、`ip-address 10.2.0→10.7.2`、`vitest` 与 `@vitest/{expect,mocker,pretty-format,runner,snapshot,spy,utils} 4.1.9→4.1.11`、`postcss 8.5.16→8.5.28`、`nanoid 3.3.15→3.3.19`、`side-channel 1.1.0→1.1.1`、`tinyrainbow 3.1.0→3.1.1`、`@jridgewell/sourcemap-codec 1.5.5→1.6.0`；移除 = `body-parser/node_modules/qs`（嵌套旧副本，已 dedupe 到顶层 6.16.0）。
-  - **client**：版本变化 **28** / 新增 **0** / 移除 **0**。变化 = `nanoid 3.3.11→3.3.19`、`postcss 8.5.12→8.5.28`、`fast-uri 3.1.2→3.1.8`、`brace-expansion 5.0.6→5.0.12`（另一份嵌套 `2.1.0→2.1.7`）、`browserslist 4.28.2→4.29.0`、`baseline-browser-mapping 2.10.24→2.11.25`、`@babel/core 7.29.0→7.29.7` 及 `@babel/*` 家族、`postcss-selector-parser 6.1.2→6.1.4`、`caniuse-lite`、`electron-to-chromium`、`node-releases`、`update-browserslist-db`。
-  - **① resolved 全为 `registry.npmjs.org`：✅** ｜ **② 新增包里 `hasInstallScript`：0 个（两份锁文件都零新增包）：✅** ｜ **③ 涉及包名逐一对照分诊文档 14 包及传递依赖：✅**（server 侧多出的 `express` 即文档指定的承载路径；`nanoid` 是 postcss 的依赖、`side-channel` 是 qs 的依赖、`tinyrainbow`/`@jridgewell/sourcemap-codec`/`@vitest/*` 是 vitest 的依赖，均属传递依赖）。
-- **T5**：提交 `05729f6`（server 锁文件，80+/94−）与 `9083ae6`（client 锁文件，128+/125−）；`git diff --stat -- server/package.json client/package.json` **无输出**（逐字节未改）；**未 push**。
-- **环境备注（分诊文档未记全，实测补充）**：npm **10.9.8** 上 server 侧 `npm audit fix` **与** `npm update <含 vitest 的多个包>` 都会崩在同一处 arborist `loadPeerSet`（`Cannot read properties of null (reading 'edgesOut')`），崩点由 `vitest@4.1.11` 的 peer 图触发。可行绕法：① `npm update <包名>` **逐个**更新（express / ip-address / body-parser / postcss 都不崩）；② vitest 一步加 **`--legacy-peer-deps`**（只改 peer 解析；本锁文件上结果是纯版本提升，见 T4 断言①③）。
-- **回滚材料**：旧锁文件备份 `/tmp/bili-dep-scratch/{server,client}-package-lock.json.orig`（git 历史里同样可取）。
+**完成情况（commit `74096ac` 修复+文档、`3ae10ef` 自测；均**未 push**；未改依赖/package.json/锁文件）**
 
-**任务进度：** - [x] T1 - [x] T2 - [x] T3 - [x] T4 - [x] T5
+- **自测末行（修复版）**：`跑了 25 项，通过 25，失败 0，需联网但联网失败 0`（退出 0）
+- **「先红」证据（同一套 25 项，拿旧版 `d8b6ca2` 跑）**：`跑了 25 项，通过 10，失败 15，需联网但联网失败 0`（退出 1）。逐条原始输出（节选，均为旧版）：
+  | 缺陷 | 旧版输出（红） | 修复版（绿） |
+  |---|---|---|
+  | H1 同版本改 resolved/integrity/加 install script | `exit=0`「查了 **0 个变动包**（server 0 / client 0）…违规 **0 项**」 | `exit=1`，三条违规逐项列出（版本没变但 resolved 变了 / integrity 变了 / 新增 install script） |
+  | H2a 同版本 resolved 指别的包 | `exit=0`「查了 0 个变动包…违规 0 项」 | `exit=1`「的 resolved 指向别的包/版本」 |
+  | H2b 升版本但 resolved 指旧版本 | `exit=0`「查了 1 个变动包…违规 0 项」 | `exit=1` 同上 |
+  | H3 版本 `constructor` / `__proto__` / `toString` | `exit=0`「最年轻 **NaN** 天…违规 **0 项**」（三种都一样） | `exit=2`「算不出：查不到 good-dep@constructor 的发布时间」 |
+  | H4a/H4b（npm_config_registry / 仓库 `.npmrc`） | `exit=0`（且无 registry 回显；记录型桩显示 config 未隔离） | `exit=0` 且**记录型桩断言**通过：argv 含 `--registry=<LOCK_CHECK_REGISTRY>`、`--userconfig=`/`--globalconfig=` 指向空文件、环境里 `npm_config_*` 计数 **0**、npm 的 cwd 不在仓库内 |
+  | M1 锁条目为 null | `exit=1`，Node 栈（`at async asyncRunEntryPointWithESMLoader …`） | `exit=2`「算不出：锁条目不是对象」 |
+  | L1a/L1b `--diff -h` / `--diff --output=x` | `exit=2` 但不是拒绝选项，而是 `git show -h:… 失败(129)`；**L1b 时 git 把 `--output=x:server/package-lock.json` 当成输出文件去写**（因父目录不存在才失败） | `exit=2`「算不出：base-ref 以 - 开头，拒绝：…」 |
+  | L2 gh 恰好 100 条 | `exit=1` 报「GitHub open 告警 100 个」（**不标已截断**） | `exit=1` 且标注「⚠ GitHub open 告警 ≥100，未翻页，按违规处理」 |
+  | L5 audit 报 0 漏洞但退出码 1 | **`exit=0`**（报「漏洞 0 个」） | `exit=2`「npm audit（server）报 0 漏洞但退出码是 1，输出与状态互相矛盾」 |
+- **「故意改坏自测会红」证据**：把修复版里 H1 的同版本比对整段删掉 → `跑了 25 项，通过 24，失败 1，需联网但联网失败 0`（退出 1，`❌ H1 …违规 2 项`——只剩 install script 与通用断言命中）→ 已用备份还原，`diff -q` 与 25/25 那版**逐字节一致**，`TEMP-BREAK` 标记 0 处。
+- **覆盖范围**：R1–R9（原 9 项确定性回归，改用末行解析断言、不写死包数）+ H1、H2a/H2b、H3×3、H4a/H4b、M1、M2×3、L1a/L1b、L2、L5。
+- **实现要点（本轮修复的落点）**：全部四个 HIGH 都按规格落地——H1 对**每个**条目做内容断言（同版本比 resolved/integrity）；H2 `resolved` 与 name/version 绑定（不匹配 = 违规，解析不了 = 2）；H3 `Object.hasOwn` + `Number.isFinite`；H4 所有 npm 调用固定 registry + 空的 user/global config + 剔除 `npm_config_*` + 受控 cwd，registry 回显。M1 catch-all 退 2、M2 包名正则白名单 + `view --json … -- <name> time`、L1 `rev-parse` 成 SHA、L2 去 `--paginate` 且 ≥100 按违规、L5 矛盾即 2。
+- **文档（`docs/dependency-policy.md`）**：新增 §5「自测与威胁模型」（自测用法 + 上表的先红后绿证据 + 威胁模型 + 限制：`hasInstallScript`/`integrity` 只对诚实 npm 产出的锁有意义、不查 tarball 哈希、不覆盖 typosquatting 等）；§4 更新退出码语义（含「任何未预期异常一律 2」「audit 0 漏洞但退出码非 0 = 2」「≥100 未翻页」），写明 **H2 取「违规」**，并把 `npm_config_registry` 的旧用法替换为 `LOCK_CHECK_REGISTRY`（脚本已不认前者）。
 
-**关键决策点：**
-- 架构/接口变动：无（仅两份锁文件；`package.json` 未动）。
-- 安全相关：**依赖更新本身** —— 28 个告警涉及包全部升到修复版本（或更高，仍在范围内）；零新增依赖、零 install script、resolved 全为官方 registry。可达性判断见分诊文档（这些告警在本应用代码路径不可达）。认证/密钥/用户输入/SQL/文件路径/外部请求：无变化。
-- 偏离原计划：① vitest 一步改用 `--legacy-peer-deps` 绕过 npm 崩溃（分诊只建议「按名字 update」，实测不够）；② `ip-address` 落到 10.7.2（文档预期 10.3.1）、server `postcss` 落到 8.5.28（文档预期 8.5.23）——都在原范围内、都是更新版本，无风险差异。
-- 未解决的疑虑：
-  1. `--legacy-peer-deps` 只影响这一次 resolution；以后常规 `npm install` 会按正常 peer 规则重算依赖树，届时解析结果可能又变（无实际影响，锁文件为准）——仅备注。
-  2. 告警是否真关闭 = **push 后** GitHub 重扫（有几分钟延迟）；本地代理指标（两份 `npm audit` 0）已达标，验收标准以 push 后的 API 读数为准。
-  3. better-sqlite3 未动版本（11.10.0），但 `npm ci` 重装过它：已实测 `:memory:` 加载正常 + 测试全绿；生产进程要重启后才会用新装的副本（启动脚本的 ABI 自愈兜底仍在）。
-
-**顺带变动：** 已按工作者写入流程第一步勾选 T1–T5 并加完成状态行；未改动全局者正文。
-
-## [2026-09-21 12:15] 工作者 — 依赖冷却期 + 体检脚本：实现 + 自测 + T4 实测完成
-
-**完成情况：**
-- **交付物（commit `d8b6ca2`，2 文件 356+）**：`scripts/lock-check.mjs`（`--diff` / `--audit`）与 `docs/dependency-policy.md`。**未 push**；无依赖变化、`package.json` 未动。
-- **T3 自测（按「写检查脚本」纪律）**：
-  - **(a) 返回 0 的路径逐条确认**：
-    - `--diff` 只有一条 0 路径（`violations.length === 0` 且全程无 CannotCompute），其必经：① ref 与两份锁文件都成功读到并解析（`git show` 成功、文件存在、有 `packages` 段）——否则 2；② 每个「变动/新增」项都过了内容断言（`resolved` 官方源、有 `resolved` 必有 `integrity`、无新增 install script）——否则 1；③ 每个变动项都取到了发布时间（`npm view <包名> time` 成功且该版本在 `time` 里）——否则 2；④ 每个变动项 age ≥ N 或进了 `--allow`——否则 1。**没有「跳过检查仍返回 0」的分支**；0 变动时第 ②-④ 步的循环为空集（真空成立），且输出仍报范围与计数（不输出「没有新东西」）。
-    - `--audit` 只有一条 0 路径，其必经三处真跑：server `npm audit` ✓ + client `npm audit` ✓ + `gh api` 查询 ✓（任一失败/输出不可解析 → 2），且两处漏洞数都为 0、open 告警为 0。
-  - **(b) 不会永远报警**：现状 `--audit` → **退出 0**（server 198 包 / client 459 包，漏洞 0，GitHub open 告警 0）✓
-  - **(c) 确定性回归 9 项，全部符合预期**：
-
-    | 命令 | 期望 | 实测 |
-    |---|---|---|
-    | `--diff d6df3c7 --min-age-days 0` | 0 | **0**（45 个变动包，最年轻 2.6 天） |
-    | `--diff d6df3c7 --min-age-days 3650` | 1 | **1**（45 项违规，逐条列出） |
-    | `--diff no-such-ref-0921` | 2 | **2**（`git show` exit 128） |
-    | `npm_config_registry=http://127.0.0.1:9 --diff d6df3c7` | 2 | **2**（ECONNREFUSED） |
-    | `--audit --root <d6df3c7 旧锁文件临时目录>` | 1 且漏洞 >0 | **1**（15 个 = server 7 + client 8，与清理前一致） |
-    | `PATH` 去掉 gh 后 `--audit` | 2 且明说未查 | **2**（「算不出：GitHub 告警未查：gh 无法执行（ENOENT）」） |
-    | `npm_config_registry=… --audit`（联网失败不许给 0） | 2 | **2** |
-    | `--audit`（现状） | 0 | **0** |
-    | `--diff d6df3c7 --allow electron-to-chromium@1.5.433` | 1，放行 1、违规减一 | **1**（违规 8 / 放行 1，末行清单含该版本与天数） |
-
-  - 触发点 (a) 演练：`--diff 'd8b6ca2^'`（本任务未改锁文件）→ **0 变动包、退出 0**，末行 `查了 0 个变动包（server 0 / client 0），范围 d8b6ca2^..工作区，最年轻 — 天，违规 0 项，放行 0 项：无` ✓（0 变动时「最年轻」显示 `—`，已在文档说明）
-- **T4（`--before` 实测；临时目录只拷 package.json + package-lock.json，无 data.db/.env/node_modules）**：
-  - **能用**：`npm update express --package-lock-only --before=2026-09-10T00:00:00Z` → express **4.22.2**（发布 2026-05-11）；**不带 `--before` 的对照** → **4.22.3**（发布 **2026-09-14**，在截止线之后，被正确挡掉）；截止线推到 4.22.2 发布前（`--before=2026-05-10`）→ express **停在 4.22.1**。
-  - **边界（已写进文档）**：① `--before` 只过滤「可选版本」，**不越过 `package.json` 范围**——同一截止线下 `qs` 停在 `~6.15.1` 内最高的 6.15.3（6.16.0 虽发布在截止线之前，也不在范围内）；② **不带包名的整树 `npm update --before=…` 仍撞 npm 的 arborist bug**（`edgesOut`；实测锁文件无残留改动）；③ 它是**事前**手段，事后关卡仍是 `--diff`——两者都保留。
-- **T5**：`docs/dependency-policy.md` 含 ① 冷却期规则与例外四条件（含「N 调大 → 例外更频繁」的成本提醒）② 更新操作方式（`--before` 用法表 + 本项目 npm 坑的**指针**，指向 `docs/dependabot-triage-2026-09-21.md` 不复制）③ 三个触发点（工作者 / 全局者 / 周期体检）④ 脚本用法、退出码、末行固定格式 + 自测记录表。
-
-**任务进度：** - [x] T1 - [x] T2 - [x] T3 - [x] T4 - [x] T5
+**任务进度：** - [x] T1 修复 - [x] T2 自测 - [x] T3 文档 - [x] T4 提交（两个提交：`74096ac` 修复+文档、`3ae10ef` 自测）
 
 **关键决策点：**
-- 架构/接口变动：新增 `scripts/`（仓库首个）与 `scripts/lock-check.mjs`、`docs/dependency-policy.md`；无依赖变化、无接口变化。
-- 安全相关：**检查脚本本身** —— 不新增网络面（复用既有 npm/gh 命令与官方 registry；`gh` 只读本项目告警）；`--diff` 四类断言覆盖供应链常见改动（源 / 完整性 / 安装脚本 / 新版本冷静期）；`--audit` 对任何「查不到」一律非零退出，**不 fail-open**（`npm audit` 空输出不当 0、gh 不可用明说未查）。认证/密钥/用户输入/SQL/文件路径：无。
-- 偏离原计划：① 额外补了两个用例（`--audit` 联网失败、`--allow` 放行路径）——都属纪律条文直接要求覆盖的成功/失败路径；② 0 变动时「最年轻」显示 `—`（空集无最年轻）并在文档说明；③ 文档里写明「对 d6df3c7 跑 `--diff --min-age-days 7` 会报 8 个未满 7 天的历史包」的原因（清理先于本策略），避免未来误读为缺陷。
+- 架构/接口变动：`scripts/lock-check.mjs` 的行为变化（退出码语义更严：更多情形落到 2）；新增 `scripts/lock-check.selftest.mjs`；无依赖/接口变化。
+- 安全相关：**检查脚本自身** —— 修复的正是「报绿其实没查」四类结构性缺口 + 两个注入面（包名进 npm argv、ref 进 git argv）+ 一条配置劫持面（npm 子进程的 registry/config/cwd 隔离）。无新增网络面；`LOCK_CHECK_REGISTRY` 只被测试使用，生效值回显。认证/密钥/用户输入/SQL/文件路径：无。
+- 偏离原计划：无（逐条照规格实现）。补充两条实测发现，写进文档与本次交接：① **npm 拒绝同一文件同时作 user/global config**（`double-loading config … as "global", previously loaded as "user"`）→ 用两个空文件；② 本机 `npm view` **打不到自建的极简假 registry**（在发请求前就挂起，`--loglevel=silly` 显示停在 config 之后、无 fetch）→ 自测改用**记录型 npm 桩**（既回答 `view` 又记录 argv/env/cwd），H4 的断言因此比原方案更强。
 - 未解决的疑虑：
-  1. `--before` 对「**新引入的传递依赖**」是否同样过滤**未实测**（本次没出现该场景：express 4.22.2 的依赖都在范围与截止线内）。文档已把结论限定为「按包名 update 的版本选择」。
-  2. 周期触发点 (c) 是**弱触发点**（靠全局者会话读 `context.md` 的「依赖体检记录」行，不是脚本强制）；文档如实标注。
-  3. `--diff` 的「变动包」= 版本变化 + 新增，**移除只在明细里报告**（按任务要求实现）；若将来认为「移除」也需要断言（例如移除伴随 integrity 丢失），需要扩展脚本——当前无此需求。
+  1. `--allow` 的语义仍是「跳过冷却期」；本轮没有额外校验「放行名单里那个版本是否真的在允许集合内」——按规格未要求，如需收紧可后续加。
+  2. 自测的 R1–R9 依赖真实仓库的历史提交 `d6df3c7`（需要一个「确实有变动」的 base）与真实 npm/gh 联网；若将来仓库历史被重写或长期离线，这几项会记「需联网但联网失败」或断言失败（非静默通过）。
+  3. `lock-check.mjs` 仍**不下载 tarball 校验哈希**、不做签名验证（已在文档「限制」里写明）——这是刻意的范围边界。
 
-**顺带变动：** 已按工作者写入流程第一步勾选 T1–T5 并加完成状态行；未改动全局者正文。
+**顺带变动：** 已按工作者写入流程第一步勾选 T1–T4 并加完成状态行；未改动全局者正文。
 
-## [2026-09-21 12:26] 全局者 — 复审：lock-check.mjs 安全审查不通过，打回修复（4 HIGH）
+## [2026-09-21 15:09] 全局者 — 复审：第 2 轮安全审查发现新缺口，触发式升级由全局者直接修复；lock-check 收尾
 
-**背景：** 工作者交接块（[2026-09-21 12:15] 条）交付 `scripts/lock-check.mjs` + `docs/dependency-policy.md`（`d8b6ca2`）。旧条：[12:09] 全局者（本任务决策）已归档 `context_history.md`。
+**背景：** 工作者 [13:01] 交接（`74096ac` 修复 + `3ae10ef` 自测，25/25）。旧条 [12:26]（第 1 次打回）已归档 `context_history.md`。
 
-**审查动作：**
-- 安全预检 `security-scan.sh 419db72`：命中 8 处（`spawn`/`https://`，脚本会执行外部命令）→ 必审。全局者**通读了全部 253 行**并自跑了一部分回归；同时 invoke `security-reviewer`（只读，在临时仓库里用真实 npm/git/node 实测）。
-- **全局者自己通读时只发现了一个问题**（锁 key 做的包名直接传给 `npm view`，可注入 npm 选项）；**漏掉了 H1–H4**——是独立审查抓到的。如实记录：一个人读代码不够，检查脚本这类「自己就是防线」的东西必须有独立的对抗式审查。
-- **全局者独立复现了 H1 与 H3**（临时 git 仓库）：H1 同版本 `left-pad` 把 `resolved` 换成 `git+ssh://git@evil.example/x.git#deadbeef`、`integrity` 改掉、加 `hasInstallScript:true` → 「查了 0 个变动包 … 违规 0 项」退出 **0**；H3 版本号取 `constructor` → 「最年轻 **NaN** 天 … 违规 0 项」退出 **0**。
-- 全局者自跑并**与工作者报告一致**的回归：`--audit`（0）、`--diff d6df3c7 --min-age-days 0`（0）、`--min-age-days 3650`（1）、不存在的 ref（2）、`npm_config_registry` 模拟联网失败（2）、gh 不在 PATH（2，明说「GitHub 告警未查」）。**也就是说：工作者自测的那些项确实成立——问题不在这些，而在「什么算变动」的定义太窄。**
+**审查动作：** 安全预检 `security-scan.sh d8b6ca2` 命中（`spawn` 等）→ 必审。全局者先亲手复核：H1/H3 反例已修好（H1 报 4 项违规退出 1；`resolved` 域名伪装 `registry.npmjs.org.evil.example` 退出 1；删掉 resolved+integrity 退出 1）；自测 25/25 自己跑了一遍；同时发现**别名条目冷却期按锁 key 查**（规格 H2 要求用 `entry.name`）。随后 `security-reviewer` 对修复做对抗式复审。
+**审查结论（security-reviewer）：不可放行。** 新的 1 HIGH：`NODE_ENV=production` 时 `--audit` 漏掉 devDependencies 的漏洞仍退出 0；5 MEDIUM：M-1 别名查错包、M-2 无 resolved/integrity 的条目所有断言被跳过、M-3 空锁 `--audit` 报 0、M-4 包名正则放行 `.`/`..`、M-5 npm 沿父目录找 `.npmrc`（`TMPDIR` 被劫持时作用域 registry 生效）；LOW：L-a `GIT_*` 未剔除、L-b `--root` 子目录 base 读错、L-c `--min-age-days ""` 变 0、L-d 版本串 `created`、L-e 字段类型/格式、L-f `GH_HOST`、L-g 非官方源无提示。审查者自己也承认：第 1 轮已修的 H1–H3、M1、M2、L1、L2、L5 均**复现确认落地**。
 
-**审查结论（security-reviewer）：不可放行。** 4 HIGH（H1 同版本换内容不查；H2 `resolved` 与 name/version 未绑定，冷却期可查错对象；H3 原型键得 NaN 仍放行；H4 npm 配置可被 cwd 的 `.npmrc`/环境变量劫持）、2 MEDIUM（M1 异常退出码语义错；M2 包名注入 npm 选项）、L1–L5。详见 `plans/dep-audit/lock-check-fixes.md`。
+**决策（触发式升级）：** 这是该模块**第 2 次被打回**，按 WORKFLOW 由全局者**直接实现**，未再回工作者。理由：缺口都是「小而具体」（每条 1–10 行），来回一轮的沟通成本高于直接改。
 
-**对工作者自测的评价（不是指责，是记录教训）：** 「列出所有返回 0 的路径并逐条确认」这条纪律它执行得很认真、结论自洽——`--diff` 只有一条 0 路径且必经三步检查。**问题出在：这条纪律只保证「走到 0 的路径上检查都做了」，不保证「检查的对象定义得对」**。H1 就是「变动包 = 版本变化 + 新增」这个定义本身漏了「同版本换内容」。今后写这类检查的验收清单时，除了「所有成功路径」，还要加一问：**「有哪些改动会绕过『被检查对象』的定义，却仍能让锁文件变坏？」**（已写进修复规格的自测要求：用对抗样本而不是只用真实历史。）
+**已改（脚本 `scripts/lock-check.mjs`、自测、文档 `docs/dependency-policy.md`）：**
+- 环境隔离：`cleanEnv` 剔除 `NODE_ENV`、`GIT_*`、`GH_HOST`/`GH_REPO`；npm 调用加 `--prefix=<自己的空目录>` 与 `--include=dev`；`gh` 加 `--hostname github.com`；`git show` 用 `<sha>:./<dir>/…`（相对 `--root`）。
+- 条目断言：别名条目用 `entry.name`（绑定、冷却期、`--allow` 一致，输出标注锁 key）；无 `resolved` 的条目只允许 `inBundle`/`link`；`integrity` 需 `sha…-` 前缀；`version` 必须为字符串、`hasInstallScript` 只能缺省或 `true`；冷却期查询的版本串必须是 semver；包名正则首字符不许 `.`/`_`。
+- `--audit`：空锁/残缺锁（无 `packages`、声明了依赖却无条目、npm 报 0 依赖但锁有条目）= 算不出。
+- 其它：`--min-age-days ""`/非数字 = 算不出；输出回显冷却期阈值；非官方 registry 加醒目提示。
+- 自测：25 → **47 项**（新增 22 例：H-A、M-1、M-2、M-3×2、M-4×3、M-5×2、L-a、L-b、L-c×2、L-d×2、H3b、L-e×3、L-f、L-g）；H3 三个用例的期望改为「退出 2 且无 NaN/违规 0」（现在 semver 校验先拦下）。
 
-**决策：** 打回工作者修复（T1–T4），**不由全局者直接实现**——这是第 1 次打回，未触发「≥2 次转全局者」；规格已给到正则与写法级别。自测要求升级为「可重复运行 + 证明不是永远绿」。
+**验证（已核实）：** ① 47/47 全绿；② 同一套用例拿 `74096ac` 版跑：**26/47，新增的 21 项全红**，各缺口在旧版上的真实表现（报绿退出 0 或错误语义）逐条保存在自测输出里；③ 用真实 npm 单独复现三条最要紧的：`NODE_ENV=production`（旧 0 漏洞退出 0 → 新 2 个 critical 退出 1）、`TMPDIR` 劫持（旧命中假 registry 退出 0 → 新 0 次命中退出 2）、`..` 包名（旧退出 0 → 新退出 2）；④ 真实仓库 `--diff HEAD`（659 个条目）0 违规、退出 0，说明新规则对真实锁不误报。
+**过程中的错误（如实）：** 我第一次改完自测跑出 9 项红——是我新加的辅助函数 `label` 与 `runDiff` 里已有的局部变量重名（暂时性死区），自测抓到了，改名 `describeItem` 后 47/47。
 
-**升级判定（判断）：** 若修复后再次被审查打回，按 WORKFLOW 转全局者直接实现。
-
-**移交工作者：** T1 → T2 → T3 → T4。交接块必须附：每缺陷「旧版红 / 修复版绿」输出、自测末行、「故意改坏自测会红」的证据。
+**未验证：** 第 2 轮修复**没有再经独立复审**（见「当前状态」的校准要求）；`--userconfig` 空文件 / `--prefix` 在别的 npm 版本上的行为只在本机 npm 10.9.8 上验证过。
+**关键决策点：** 安全相关——检查脚本自身；升级判定：已按触发式升级由全局者实现。
