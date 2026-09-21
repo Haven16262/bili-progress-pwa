@@ -1333,3 +1333,22 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **升级判定（判断，非事实）：** 依赖版本更新不在 `WORKFLOW.md` 强制升级清单内；改动局限于锁文件、可被测试与 `npm audit` 客观验证 → 交工作者。若出现须改 `package.json` 范围、须动 `better-sqlite3`、或锁文件 diff 自查任一断言不成立 → 停下回全局者。
 
 **移交工作者：** T1 → T2 → T3 → T4 → T5。完成后：我复审 → 用户 `! pm2 restart bili`（服务端依赖生效）+ `! git push origin master` → 我再拉一次 GitHub 告警确认归零。
+
+## [2026-09-21 11:56] 全局者 — 审查通过：Dependabot 依赖清理放行（commit `05729f6` + `9083ae6`）
+
+**背景：** 工作者交接块（[2026-09-21 11:47] 条；原写 11:57 晚于真实时间——两个提交在 11:46——已订正）交付 T1–T5。旧条：[11:35] 工作者（T9）、[11:42] 全局者（本任务决策）已归档 `context_history.md`。
+
+**审查动作：**
+- 安全预检 `security-scan.sh d6df3c7`：命中（锁文件里的 `https://` 行，噪音）；规则要求「命中即必审」→ 因 `critic` 无 Bash 工具、看不了 git diff 与 `npm view`，改 invoke `security-reviewer`（只读、限定供应链维度、按 critic 报告格式输出），关键结论由全局者独立复算。
+- **全局者独立复核（不依赖工作者报告）：** 解析两份锁文件前后 JSON（`d6df3c7` vs `HEAD`）——server 变化 17 / 新增 0 / 移除 1（嵌套旧 `qs@6.15.1`）、client 变化 28 / 新增 0 / 移除 0，与工作者一致；`resolved` 全为 `registry.npmjs.org`、完整性哈希齐全、**无新增 `hasInstallScript`**、`better-sqlite3` 11.10.0 不变、两份 `package.json` 逐字节未改；两个目录 `npm audit` 均 **0 漏洞**；`server` 干净 shell（`env -i`）**46 例全绿**；`better-sqlite3` 打开 `:memory:` 库正常。**另外做了工作者没做的启动验证：** 用新依赖在临时端口（3999，内存库，假密钥，不碰真实库与运行中的进程）起完整应用——`/api/ping` 200、未鉴权 `/api/videos` 401、限流头在；更新后的 `qs` 处理嵌套/数组/12 层深嵌套/1000 项数组查询串均无崩溃（全 401、日志 0 条 `[error]`）、应用全程存活；测完按 PID 关掉，线上 3000 全程 200。（过程中我的第一次清理命令用 `pkill -f` 把自己的 shell 也杀了，临时服务残留过片刻，已按 PID 关闭并确认端口已释放；随后用 `curl -g` 重做了被 `[]` 通配符弄失效的 `qs` 检查。）
+- **security-reviewer 报告：可放行，无 CRITICAL/HIGH，2 MEDIUM + 4 LOW，均不阻塞。** 它对 45 个变动逐个 `npm view` 新旧版本（维护者/发布者/deprecated/仓库/tarball/完整性），43 个不同版本的锁文件 integrity 与 registry **0 不一致**，`npm audit signatures` 两个目录已装包**全部签名验证通过**（server 169、client 410），对 12 个包做了 tarball 内容 diff 并 grep 危险模式（仅 ip-address 的两处正则 `.exec()`，无害）。
+
+**裁定（针对交接块与审查报告）：**
+1. **新版本较新（9 个不足一周，最新 2.1 天）**：**接受**。依据：发布者是各项目自己的 GitHub Actions + 带 provenance、维护者列表未变、版本跳跃属常规补丁/小版本、签名与完整性全部验证；这些是数据类包（`electron-to-chromium`/`node-releases` 等）的常规节奏，加上 28 个告警对应的补丁潮。**已知残余风险**（审查者也明说）：没有逐字审读全部 45 个 tarball（12 个做了 diff）、没查维护者账号是否被盗、太新的版本可能尚未被撤回——这是「要不要设依赖冷却期」的**流程决策，不是本次缺陷**，已入 backlog 由用户定。
+2. **MEDIUM-1（`tinyrainbow`、`postcss-selector-parser` 各增加一位维护者）**：**接受，不阻塞**。两者都只在**开发/构建阶段**（vitest 依赖 / tailwind 构建链），**不在生产运行路径**；新版本发布已 54 天 / 3 个月，非新近；审查者对这两位账号的身份判断来自记忆、未验证，我也无法验证——如实记为「未验证」。
+3. **MEDIUM-2（`qs`/`side-channel`/`fast-uri` 等个人发布、无 provenance）**：**接受**。旧版本同样无 provenance，不是退化；`qs` 与 `side-channel` 的发布者 `ljharb` 是长期维护者且维护者列表未变。生产运行路径上真正变动的包只有 `express`/`qs`/`body-parser`/`ip-address`/`side-channel` 五个，其中前三者中 express、body-parser、ip-address 带 provenance。
+4. **LOW-3（`express` 4.22.3 给 `req.query` 加 `arrayLimit: 1000`）**：已由上面的启动验证覆盖（1000 项数组查询不崩）；本应用不使用查询串数组。**LOW-2**（`brace-expansion` 收窄 `engines.node`）：部署机 Node 22.23.2，无影响。**LOW-1**（`ip-address` 新增 `prepare` 脚本）：npm 不会在依赖安装时执行 `prepare`，且无 `hasInstallScript`。
+5. **工作者的偏离 ①②**（vitest 一步用 `--legacy-peer-deps` 绕过 npm 崩溃；`ip-address` 落 10.7.2、server `postcss` 落 8.5.28，均新于分诊文档预期的最小修复版）：**接受**。① 我在分诊文档写「按名字 update」不够，实测补充已写进文档；② 都在原范围内。「`npm update` 取范围内最新」是 npm 默认行为，若要「只取最小修复版」属冷却期/固定策略的流程决策，同上。
+6. **工作者的疑虑 1**（`--legacy-peer-deps` 只影响这一次解析，以后常规 `npm install` 可能重算）：知悉，以锁文件为准，无需处理；**疑虑 3**（`npm ci` 重装过 `better-sqlite3`）：已由我独立复核（加载正常 + 46 例全绿 + 临时实例启动正常）。
+
+**发布决定：放行** `05729f6`、`9083ae6`。**移交用户：** ① `! pm2 restart bili`（服务端依赖生效）；② `! git push origin master`。之后全局者核对线上 `/api/ping` 并拉 GitHub 告警确认归零。**注意：** 生产进程在用户重启前仍跑着旧依赖；`client/dist` 按分诊结论**不重建**（这些包不进浏览器产物）。
