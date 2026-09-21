@@ -9,35 +9,26 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。庆祝动效相关的全部迭代已上线：16px + 静态去柔光、放慢 1.2×（3.6s，`client/dist` = `index-B1iCjU_8.js` / `index-Czx-wwLI.css`，全局者 2026-09-21 11:36 核对线上 index.html 哈希与 dist 一致、六处动画都引用 `--duration-celebrate`）。**已发布**：用户 2026-09-21 第二次 `! git push origin master` 完成（`e15fea8..87d082c`，含 16px、放慢 1.2× 及全部 docs 提交；Dependabot 仍 28 个，与 backlog 一致）。此后仅有本条 docs 提交在本地，随下次 push 顺带发布，非阻塞。
-**当前任务:** 无。仅剩用户的两件小事：看放慢后的庆祝效果（预览视频 `BV_TEST_CEL_PREVIEW3`，id 50；倍数不合适只改 `--duration-celebrate` 与 `CELEBRATION_MS` 两处），看完用红色「删除」清掉它（假 bvid，不会自动归档）。
-**关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
+**阶段:** 无进行中 Phase。前序全部任务（412 冻结、删除功能、庆祝动效 + 归档 7 天、16px、放慢 1.2×）均已闭环并已 push（`origin/master` = `87d082c`，其后仅本地 docs 提交）；用户已删除预览视频，生产库回到 10 行真实数据。**本轮新插入任务「Dependabot 依赖安全清理」**（用户 2026-09-21 提出，本轮全局者已按 backlog 要求**拉全量重新分诊**）。
+**当前任务:** 把 GitHub 上 **28 个 open 的 Dependabot 告警（14 个包）清到 0**：修法全在现有版本范围内（**无大版本升级、不加 `--force`、不加新依赖**）。**先在临时目录验证，再动真实目录**；**不重启服务、不 push、不重建 `client/dist`**（服务端依赖变了需用户 `! pm2 restart bili`；push 由用户）。
+**关键依据文档（先读，含 14 包×告警号表、可达性核实、已知雷区）:** `docs/dependabot-triage-2026-09-21.md`。
 
-**用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
-1. 基调 A+C，配色只在蓝紫/紫/兰紫之间；**彩虹与白光均被用户明确否决**（彩虹与紫色玻璃液体违和；白光单调）。
-2. 触发 = `progress >= 100`（不四舍五入，与归档判据同一条）且未归档，含手动标记完成；设置页不做。
-3. 每视频每设备只播一次（localStorage），之后静态终态，悬停重放；reduced-motion 下不播不重放、只留静态终态。
-4. 100% 视频首页保留 **7 个日历日**后归档（原 3 天）。库里当前无正在计数的 100% 视频（2026-09-21 只读查询），无需迁移。
+**全局者分诊结论（要点，细节与依据见上文档）:**
+- **已核实**：告警来源 = GitHub 扫**默认分支上的 `package-lock.json`**，所以必须提交并 push 新锁文件才会关闭；client 的漏洞包（nanoid/postcss/browserslist/fast-uri/brace-expansion）**没有一个进入浏览器产物**（`client/dist/assets/*.js` 搜索命中 0）；**全部有修复版本**；**`qs` 必须经 `express` → 4.22.3 才能到 6.16**（4.22.1 把 qs 写死 `~6.14.0`），不要用 `overrides` 硬压；`server` 上 **`npm audit fix --dry-run` 会崩**（npm 内部错误 `edgesOut`），要用 `npm update <包名>`；`client` 上 `npm audit fix` 不加 `--force` 即可。
+- **已核实（读了本项目代码）**：服务端代码不调 `qs.stringify`、不开 `comma`、`express.json` 的 limit 合法（`1mb`）、只向写死的 `api.bilibili.com` 发请求 → 这些告警在本应用**不可达**。**判断**：实际被利用的可能性低，但值得清（告警一直在涨会淹没将来真正相关的）。
 
 **任务清单(给工作者):**
-- [x] **T1 归档天数 3→7（plan 009 Part A）**：`server/src/services/sync.js` 两处 `newCount >= 3`（自然路径与 5b 手动完成路径）改用同一个命名常量；`SettingsPage.vue` 第 113 行文案改 7；更新 `sync.test.js` 里依赖阈值 3 的旧用例并**新增**「第 6 次不归档、第 7 次归档」边界用例（两条路径各一，且**先确认阈值仍为 3 时新用例会红**）；`CHANGELOG.md` 记一条。（完成标准：`server` 干净 shell（`env -i`）全绿；单独一个提交）
-- [x] **T2 庆祝动效（plan 009 Part B）**：`Cylinder3D.vue` + `HomePage.vue` + 新 `client/src/utils/celebrated.js` + `main.css` token（+ `tailwind.config.js` 同步）。（完成标准：plan 009「验证」一节 8 项全过；数字对比度按计划里的判据**实算**并把数字写进交接；单独一个提交）
-- [x] **T3 端到端验证与截图**：按 plan 009「验证」用**假 bvid**（`BV_TEST_CEL_*`）建测试视频，Playwright 跑 8 项；320/375/768/1440 截图存 `/tmp`，路径写进交接；测完清测试视频与 localStorage，库行数回到测试前。（完成标准：交接块写明每项结果 + 库行数前后一致）
-- [x] **T4 构建上线时机**：**先在 vite dev 验证，复审通过后再 `npm run build`**（`client/dist` 即生产，构建=上线；上一轮是复审前就上线了）。若确需先构建，交接里事先申明。**不 push**（守卫硬拒）。
-- [x] **T5 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（**不带** `--outDir`，这次要写 `client/dist`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，其引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 含 `celebrate-`；**不 push**（守卫硬拒）；交接里写一行结果即可，不必再写完整交接块（按 WORKFLOW 仍需先更新「当前状态」再追加一条简短历史）。
-- [x] **T6 数字改 16px + 静态去柔光（`client/src/components/Cylinder3D.vue`，仅 CSS）**：① `.cylinder-wrapper.is-complete .progress-text` 的 `font-size: 20px` → `16px`。② 静态态 `filter` 中把 `var(--celebrate-glow)` 换成 `var(--celebrate-glow-none)`（**不要直接删掉这一项**：CSS `filter` 在关键帧之间插值时，两端的滤镜函数列表必须逐项同构，删了会退化成离散跳变、庆祝结束时数字会「啪」地变一下）。③ 关键帧 `celebrate-sheen` 的 100% 与 `celebrate-sheen-once` 的 0% / 100% 里的 `var(--celebrate-glow)` 同样换成 `var(--celebrate-glow-none)`，使动画的起止态与新的静态态一致；`glow-strong` 峰值保持不变（庆祝/悬停时仍有柔光）。④ **深紫描边 `--celebrate-outline`、黑影、扫光带、光环、亮弧、`scale` 弹一下全部不动。**（完成标准：静态态计算样式里柔光层 alpha 为 0；庆祝结束后数字与静态态视觉无跳变；`--celebrate-glow` 若已无引用，则删掉这个 token 及 tailwind 中无关联的部分——只删本轮弄成孤儿的，别的不碰）
-- [x] **T7 验证（Playwright，沿用 `/tmp/bili-verify/bili-verify-celebrate.mjs` 的做法；测试视频只用假 bvid `BV_TEST_CEL_*`，测完清理，库行数前后一致；不得写真实记录）**：(a) 庆祝态数字计算字号 = 16px、字族/字重仍是 Manrope 700；(b) 静态态 `filter` 里无非零柔光；(c) 首次庆祝：出现 `.is-celebrating`、3s 后消失，且**结束瞬间前后取样两帧的 `filter` 计算值一致**（无跳变）；(d) 悬停重放仍生效（`hover:hover` 下）且结束后回到静态；(e) reduced-motion 下仍不播、静态终态正常；(f) 375 与 1440 宽截图各两张：**庆祝态的杯子与一个普通杯（如 74%）并排**，静态一张、庆祝中一张，存 `/tmp`，路径写进交接。（完成标准：全过 + 截图路径）
-- [x] **T8 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 里搜不到 `--celebrate-glow:`（只剩 `-strong`/`-none`）；**不 push**；交接一行结果即可（仍需先更新「当前状态」再追加一条简短历史）。
-- [x] **T9 构建上线（复审已通过，授权执行；本项为「动效放慢 1.2×」这一用户直接提出的小任务的收尾）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` 一致；线上 CSS 搜得到 `--duration-celebrate:3.6s`；**不 push**；构建完成后按上面的规则建预览视频并写进交接。交接一行结果即可（仍需先更新「当前状态」再追加简短历史）。
+- [ ] **T1 服务端：临时目录验证**。在 `/tmp/bili-dep-scratch/server/` 建一份**只含** `package.json`、`package-lock.json`、`src/`、`tests/`、`vitest.config.js`（及 `scripts/` 若测试需要）的拷贝——**不要复制 `data.db`、`.env`、`node_modules`**（含生产数据与密钥）。在其中：`npm ci`（先证明干净安装在本机能走通，含 `better-sqlite3` 的 prebuild 下载/编译）→ `npm update express ip-address vitest`（`postcss` 若仍旧再显式 `npm update postcss`）→ 干净 shell（`env -i`）跑测试 → `npm audit`（完成标准：**0 个漏洞**，或逐条列出残余并说明原因）→ `npm ls` 无 ERR/missing/invalid。**`package.json` 里的版本范围一个都不许改**（都在现有范围内）；若某个包必须改范围才能修 → 停下，回全局者。**`better-sqlite3` 版本不许变**（现为 11.10.0）。
+- [ ] **T2 服务端：应用到真实目录**。把 T1 验证过的 `package-lock.json` 拷回 `server/`，在真实目录 `npm ci`，然后：`node -e` 打开 `:memory:` 库确认 `better-sqlite3` 能加载；干净 shell 跑 `server` 全部测试；`npm audit` 0。**不要 `pm2 restart`**（守卫会拦；重启由用户 `!`）。（完成标准：上述全过；交接里写明「服务端依赖已更新，需用户 `! pm2 restart bili` 才生效」）
+- [ ] **T3 客户端**。`cd client && npm audit fix`（**不加 `--force`**）→ `npm audit` 0 → `npm ls` 无 ERR → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir`（**构建到临时目录，不动 `client/dist`**：这些包不进浏览器产物，重建生产 dist 没有安全收益）。（完成标准：构建绿；比较临时产物与现 `client/dist` 的 JS/CSS 体积，差异大于 ±5% 则在交接里说明）
+- [ ] **T4 交接前自查（锁文件 diff）**。对两份 `package-lock.json` 的 diff 各出一份清单：**版本变化的包（名 旧→新）**、**新增的包**、**移除的包**；并断言：① 新增/变更的 `resolved` 全部是 `registry.npmjs.org`；② 没有新增 `hasInstallScript: true` 的包；③ 只出现分诊文档里 14 个包及它们的传递依赖的变动。任一不成立 → 停下问全局者，别自行判断为无害。（完成标准：清单 + 三条断言结果写进交接）
+- [ ] **T5 提交**。服务端与客户端**分两个提交**，`git add <明确路径>` + `git commit -- <同路径>`（只有锁文件；`package.json` 若一个字节都没变就不要加）。**不 push。**
 
-**未验证的前提:**（2026-09-21 11:02 复审后）
-- **【本轮 2026-09-21 11:20】已核实**：庆祝态与其它杯的数字**是同一字体**（全局者用真实 Manrope 渲染对照：计算样式两边都是 `Manrope 700`，代码里庆祝态没有改 `font-family`/`font-weight`）；突兀来自 ① 字号 12px→20px（放大后 Manrope 的几何圆润感露出来）与 ② 描边 + 双层柔光让笔画边缘发虚、③ 淡紫渐变不是纯白。对照图（7 种呈现）已发给用户；用户选「16px + 静态去柔光」。
-- **【本轮】判断/待告知**：字号降到 16px 后，**「数字属 WCAG 大字、阈值 3:1」这一依据不再成立**（大字 = ≥24px 常规或 ≥18.66px 加粗；16px/700 不是）。按正文 AA 是 4.5:1，而杯中部液体色上 `#f5f3ff` 只有 3.31、`#ede9fe` 3.06；**现有普通杯的 12px 白字也只有 3.63**（同样没到 4.5）——所以这是**项目里数字对比度的既有状态**，不是本轮引入的退化。本轮**不改底色**（保住用户看过并认可的淡紫色泽），只是把「3:1 是大字标准」这个说法收回并如实记录；已入 backlog。若用户想让庆祝态数字更清晰，方向是把底色向纯白靠（白字 3.63），代价是淡紫色泽变淡。
-- **已验证**：`.progress-text` 真实字号 12px（工作者实测，390/1440 两宽一致，与全局者判断相符）；光环在手机横滚容器里确实被裁（工作者实测 200×300 原尺寸：上溢 36.6px、左右各 30px、320 宽还撑出横向滚动）→ 已按计划缩至 92% 并给 `.home-grid-scroll` 加 padding+等量负 margin，四宽实测可见环带 0 裁切、页面级无横向溢出；全局者本侧另看了 375/320 两张实机截图（静态与庆祝中），无硬边裁切；数字底色对比度（中列 3.06 起，全局者与工作者独立算出同一张表）；`server` 干净 shell 46 例全绿（全局者本侧重跑）；归档 7 天两条路径边界用例先红后绿（工作者报告 + 全局者读用例）。
-- **采信工作者报告、本侧未重跑**：Playwright 46 项（首次庆祝出现并消失 / 刷新不重播 / 悬停重放 / reduced-motion / 手动标记触发 / 存储不可用 / 假 bvid 清理）。动画时序与亮弧旋转只凭代码 + 其断言，全局者没有逐帧看。
-- **判断，可接受**：亮弧依赖 `@property --ang`，旧浏览器（Safari <16.4 / Firefox <128）只闪一下不旋转，静态态弧 `opacity` 恒 0（工作者已断言）；同一视频进度掉出 100 又回到 100 不重播（每视频只庆祝一次）；用户在庆祝起播后 1 秒内切走页面，也算「已庆祝」（起播时即落盘）。
-- **待用户肉眼确认（最终验收）**：真机上庆祝动效的观感、庆祝态数字（20px，略偏白，因可读性从设计稿的更紫淡紫提亮）与其它杯（12px）的大小对比、光环强度。不合适回来商量的方向是**调光的强度/光环大小**，不是把数字压暗（会破坏可读性，见 plan 009 对比度表）。
-- **已核实（同日）**：库现有 10 行（首页 8 + 已归档 2）；此前 11→10 是用户用新上线的删除功能删掉了那条「意外加入的视频」（用户在本轮对话中亲口说明，工作者对账发现的疑虑 1 由此闭环）。
+**未验证的前提:**（2026-09-21）
+- **判断**：`npm update express` 一步会把 `qs` 带到 6.16.x、`body-parser` 到 1.20.8——依据是 registry 上 `express@4.22.3` 的依赖声明（全局者用 `npm view` 读到 `qs ~6.16.0`），**本机未实际装过验证**，T1 落实。
+- **判断**：server 开发依赖里的 `postcss` 能随 `vitest` 一并升；依据是它在 vite 依赖链上，**未实测**。
+- **未知**：`npm` 具体版本（未记录）；`server` 上 `npm audit fix` 崩溃的根因（推测是 npm 内部 bug，未深究——绕开即可，不要花时间在它上面）。
+- **本轮不做**：不改 `package.json` 版本范围、不引入 Dependabot 自动更新配置（见 backlog）、不重建生产 dist。
 
 **backlog（下次开 Phase 顺手项，非紧急）:**
 - 【2026-09-21 新增】**首页杯内数字的对比度整体低于 WCAG AA 4.5:1**：杯中部液体色 `rgb(172 97 245)` 上，现有 12px 白字 3.63、庆祝态 16px 淡紫 3.06–3.31；上端液体色更低（白字 2.42）。**既有状态，非本轮引入**；靠描边/黑影提升可辨识度，但数值上没到 AA。若要系统性修：加深液体色下界，或给数字加半透明深色衬底——属视觉语言层面的取舍，需用户拍板，不在小任务里顺手改
@@ -47,7 +38,7 @@
 - 真机性能确认：液体玻璃 `backdrop-filter`（headless 4× throttle 已测；详情见上一 Phase 关闭条目）
 - `@supports` 玻璃回退块 DRY（约 12 份散在组件 scoped 样式）
 - `styleSrc 'unsafe-inline'` 移除需 nonce/hash 方案
-- Dependabot 告警 **28 个**（15 high / 10 moderate / 3 low，2026-09-11 push 时 GitHub 报；9/3 为 20、7/12 评估仅 2 —— 持续上涨）—— 下次开 Phase 前拉全量重新分诊，勿沿用旧判断
+- Dependabot 告警 28 个 → **本轮正在处理**（见「当前状态」与 `docs/dependabot-triage-2026-09-21.md`）。清完之后的建议（未决，用户定）：告警历史是 7/12 仅 2 → 9/3 是 20 → 9/11 是 28，**会再涨**；可考虑把「`npm audit` 两份锁文件」放进例行体检（如 `/pitstop`），或开 Dependabot security updates 自动提 PR——后者会让 PR 里混入依赖变化，需要一个审查流程，先不做
 - 【2026-09-21 新增】**接入 YouTube（方向，用户决定先不做）**：官方 API 无观看历史/进度，不能照搬 B站 的 SESSDATA 模式；建议先「手动进度 + API 取元数据」再视需要加浏览器端上报。含数据库迁移（`bvid` 唯一键改「平台+ID」，强制升级项，全局者实现）。完整调研与开工前要问用户的两件事见 `docs/idea-youtube-integration-2026-09-21.md`
 - M4 完整版（独立 `SESSDATA_ENC_KEY` + 迁移，全局者实现域）
 - 若 wbi 端点日后强制 wbi 签名（w_rid/wts）：改 pagelist 为主端点，或实现 wbi 签名 —— 本次刻意不做（无签名 wbi/view 现测 200，先最小改动）
@@ -69,6 +60,7 @@
 - **B站 请求节制**：历史翻页必须有提前终止 + 页数上限 + 页间延时，防触发风控（2026-07-04 架构评审 H2 决策）
 - **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出。**「视觉语言翻新」轮（2026-09-03）确认：只换杯壁材质/配色，wave rotate 动画本身不动。**
 - **当前视觉语言 = 液体玻璃（2026-09-03 起，用户经 /design 三方案选定，取代旧「深色仪表盘」）**：token 全在 `client/src/assets/styles/main.css` 的 `:root`（`--glass-*` 面板/导航/按钮、`--bg-blob-*` 背景网格、`--liquid-*-bloom` 杯子晕染、`--font-display`=Manrope、`--color-text-on-glass`），`tailwind.config.js` 同步。硬约束（后续轮沿用）：① `backdrop-filter` blur ≤20px、只用在卡片/面板/导航/弹窗/按钮，**杯子只用 radial 晕染不加 backdrop-filter**，每处必须配 `@supports not (backdrop-filter...)` 回退到不透明 `--color-surface`（`#1d1d31`）；② `--color-accent`（纯青）保留用于 `focus-visible` outline / nav-active / slider / 语义反馈——focus 可见性是 a11y 硬要求，不因玻璃美学丢；③ BottomNav 是浮起玻璃胶囊（`fixed` + `left/right:16px` + `bottom:18px`，桌面 `@media(min-width:769px)` 加 `max-width:420px`+`margin-inline:auto`），底部留白由 `App.vue` 的 `main` 统一（`pb-[calc(6.5rem+env(safe-area-inset-bottom))]`），两页面自身不再设 `padding-bottom`；④ 正文文字须过 WCAG AA（判定用声明色静态模型，渲染像素实测有抗锯齿稀释偏差）。Google Fonts 两域已在 `server/src/index.js` helmet CSP 放行（style-src fonts.googleapis.com / font-src fonts.gstatic.com）。
+- **100% 庆祝动效 = A+C 紫光（用户定版，2026-09-21，规格见 `plans/009-celebrate-100.md`）**：首页 `progress>=100` 的杯子，数字淡紫渐变（**16px，静态无柔光，只留深紫描边**）+ 杯外紫色光环/亮弧；每视频每设备首次播一次（localStorage `celebrated_100_ids`），之后静态，桌面悬停重放；时长 **3.6s** 由 `main.css` 的 `--duration-celebrate` 控制，**改它要同步 `Cylinder3D.vue` 的 `CELEBRATION_MS`**；reduced-motion 下不播只留静态终态；设置页不做。**用户明确否决过彩虹（与紫色玻璃液体违和）和白光（单调）**——后续 UI 轮不得改回。100% 视频首页保留 **7 个日历日**（`sync.js` 的 `ARCHIVE_AFTER_DAYS`）。数字对比度现状（低于 AA 4.5:1，既有状态）见 backlog。
 - **B站 图片必须 CORS 加载（2026-07-07 M2 教训）**：Chrome ORB 会拦截跨域 no-cors `<img>`（ERR_BLOCKED_BY_ORB，且报错只在网络层，DOM 只见裂图）。任何加载 B站 封面（`*.hdslb.com`/`*.bilibili.com`）的 `<img>` 都必须带 `crossorigin="anonymous"` + `referrerpolicy="no-referrer"`；CSP imgSrc 已含两域。首次误判为 CSP 问题，排查靠 Playwright 监听网络层
 - **测试纪律（教训）**：冒烟测试写接口不要拿真实业务记录当靶子；不得不用时，测试后必须完整恢复所有被改字段，不只是标志位
 - **测试封闭性（2026-07-07 教训）**：测试必须在干净 shell 里可复现，不得依赖会话环境变量——工作者曾报「29 例全绿」实为其 shell 恰好导出了 JWT_SECRET，干净环境下新用例全被跳过。所需变量一律在 `server/vitest.config.js` 的 `test.env` 注入（现有 `TEST_DB=':memory:'` + 测试专用 JWT_SECRET）；**数据库隔离靠 TEST_DB，`NODE_ENV=test` 不隔离任何东西**。交接报测试结果前先在干净环境跑一遍
@@ -81,26 +73,6 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-21 11:34] 全局者 — 审查通过：庆祝动效放慢 1.2× 放行（commit `3786e9b`）
-
-**背景：** 用户 2026-09-21 验收 11:26 上线的 16px 版后**直接对工作者**说「字体没问题了，但动效播放有点过快，大约慢个 1.2 倍吧，或者其他倍数」（「字体没问题了」= 上一任务验收通过）。工作者按用户原话取 1.2×（3s → 3.6s）实现，并在交接块如实写明来源。旧条：[11:25] 全局者（16px 审查）、[11:26] 工作者（T8）已归档 `context_history.md`。
-
-**流程说明：** 这是用户在工作者终端里直接提的新小任务，事前没经全局者。**接受**：用户的直接指令本身有权威，改动纯时长、范围小、工作者写明了来源与验证，并把「未构建、等复审」这条约定守住了（生产仍是 3s 版）。不算越权。
-
-**审查动作：**
-- 安全预检 `security-scan.sh cf60a2d`：**未命中**；「安全相关」填「无」，改动为两个文件 9 行、无输入面/请求/存储变化 → 按规则不必 invoke `critic`。
-- 全局者独立复核：`git diff cf60a2d 3786e9b` 读全 —— 新增 token `--duration-celebrate: 3.6s`（`main.css` 的 Animation Duration 段，沿用 `--duration-*` 惯例）；六处 `animation`（3 组庆祝 burst + 3 组悬停重放 once）全部改引用它；**关键帧百分比一字未动**（只改总时长，形状与节奏比例不变）；JS 的 `CELEBRATION_MS` 3000 → 3600（`is-celebrating` 移除定时器 = 3600 + 60ms 余量，与动画时长同步，不会提前摘类截断动画）。token 注释写明「改这里要同步 `CELEBRATION_MS`」，两处联动有据可查。生产库只读核对：10 行（首页 8 + 已归档 2），`BV_TEST%` 残留 0。
-- 采信工作者报告、本侧未重跑：dev 环境 17/17（三组动画计算时长 3.6s、庆祝窗口实测 3669ms、结束前后两帧 `filter` 一致、悬停重放、reduced-motion 不播、假 bvid 清理）。
-
-**裁定：**
-1. **预览视频 `BV_TEST_CEL_PREVIEW2` 已被工作者随验证清理删除**：接受（用户已看过它，且它在用户设备上已记「已庆祝」；假 bvid，无风险）。上一轮我预期「用户用红按钮自己删」——现在不需要了，`context.md` 相应表述已改。
-2. **PREVIEW3 等构建后再建**：认同工作者的顺序判断（先建会被用户在构建前打开而按旧版播掉）。已写成 T9 的明确要求，且要求在交接里写明新 bvid。
-3. 1.2× 是否合适以用户肉眼为准；用户原话允许「其他倍数」，若要再调只改 `--duration-celebrate` 与 `CELEBRATION_MS` 两处。
-
-**发布决定：放行** `3786e9b`。授权工作者执行 T9（构建上线）。push 仍由用户 `! git push origin master`。
-
-**移交：** 工作者 T9 → 用户看效果、删预览视频 → 用户 push。plan 009 的修订说明已补「时长 3.6s」。
-
 ## [2026-09-21 11:35] 工作者 — T9 构建上线完成（3.6s 版）+ 预览行 v3
 
 **完成情况：** `cd client && npm run build`（不带 `--outDir`）**绿** → `dist/assets/index-Czx-wwLI.css`（45.87 kB）+ `index-B1iCjU_8.js`（120.97 kB）；curl 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` **逐字一致**、两资源均 HTTP 200；线上 CSS 搜到 `--duration-celebrate: 3.6s`（压缩后冒号后留了一个空格，值与 T9 要求一致），且六处 `animation`（3 组庆祝 burst + 3 组悬停重放 once）都写成 `var(--duration-celebrate)` → **慢 1.2× 版已上线**。**未 push**。
@@ -109,3 +81,18 @@
 **关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：无（1.2× 是否合适由用户肉眼定；若要再调，改 `--duration-celebrate` + `CELEBRATION_MS` 两处即可，token 注释已写明联动）。
 
 **顺带变动：** 已按工作者写入流程第一步勾选 T9 并加完成状态行（「当前状态」里的预览行段落此前已被全局者重写，故预览 bvid 记在本条与状态行里）；未改动全局者正文。
+
+## [2026-09-21 11:42] 全局者 — 决策：Dependabot 依赖安全清理（28 告警 / 14 包，全在现有范围内）
+
+**背景：** 用户 2026-09-21 要求处理 Dependabot。backlog 早就写明「下次开 Phase 前拉全量重新分诊，勿沿用旧判断」，所以本轮先 `gh api` 拉全量、再读 advisory、再在本机验证可行路径，最后才定方向。
+
+**分诊结果（细节与依据见 `docs/dependabot-triage-2026-09-21.md`）：**
+- 28 个 open / 14 个包 / 两份锁文件；全部有修复版本；全部在现有 semver 范围内，**无大版本升级**。
+- **已核实**：client 漏洞包不进浏览器产物（搜索命中 0）；服务端代码不触达 `qs.stringify`/`comma`、`body-parser` limit 合法、无用户可控外发 URL → 告警在本应用**不可达**（**判断**：实际被利用可能性低，但值得清——告警持续上涨会淹没将来真正相关的）。
+- **本机发现的两个坑（避免工作者踩）：** ① `server` 上 `npm audit fix --dry-run` 直接崩（npm 内部错误），要按名字 `npm update`；② `qs` 被 `express@4.22.1` 写死 `~6.14.0`，只有 `express@4.22.3` 才放宽到 `~6.16.0`，所以必须经 `express` 升，不能 `overrides`。
+
+**决策：** 只提交锁文件、不改 `package.json` 范围；先临时目录验证再动真实目录；不重启服务、不 push、不重建生产 dist（client 漏洞包不进产物，重建无安全收益只有风险）；复审时我会跑锁文件 diff 检查，并按规则 invoke `critic` 看供应链变动（新增包 / install script / 非官方 registry）。
+
+**升级判定（判断，非事实）：** 依赖版本更新不在 `WORKFLOW.md` 强制升级清单内；改动局限于锁文件、可被测试与 `npm audit` 客观验证 → 交工作者。若出现须改 `package.json` 范围、须动 `better-sqlite3`、或锁文件 diff 自查任一断言不成立 → 停下回全局者。
+
+**移交工作者：** T1 → T2 → T3 → T4 → T5。完成后：我复审 → 用户 `! pm2 restart bili`（服务端依赖生效）+ `! git push origin master` → 我再拉一次 GitHub 告警确认归零。
