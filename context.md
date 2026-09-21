@@ -9,8 +9,8 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。庆祝动效相关的全部迭代已上线：16px + 静态去柔光、放慢 1.2×（3.6s，`client/dist` = `index-B1iCjU_8.js` / `index-Czx-wwLI.css`，全局者 2026-09-21 11:36 核对线上 index.html 哈希与 dist 一致、六处动画都引用 `--duration-celebrate`）。本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf`、`209b4df`、`cf60a2d`、`3786e9b`、`bdcea9a` 及其后的 docs 提交（其中只有 `2abf7cf`、`3786e9b` 是代码）。
-**当前任务:** 无。等用户：① 看放慢后的庆祝（首页预览视频 `BV_TEST_CEL_PREVIEW3`，id 50，假 bvid、不会被自动归档；桌面端悬停可重放）；倍数不合适告诉全局者——只改 `--duration-celebrate` 与 `Cylinder3D.vue` 的 `CELEBRATION_MS` 两处；② 看完用红色「删除」清掉预览视频；③ `! git push origin master`。
+**阶段:** 无进行中 Phase。庆祝动效相关的全部迭代已上线：16px + 静态去柔光、放慢 1.2×（3.6s，`client/dist` = `index-B1iCjU_8.js` / `index-Czx-wwLI.css`，全局者 2026-09-21 11:36 核对线上 index.html 哈希与 dist 一致、六处动画都引用 `--duration-celebrate`）。**已发布**：用户 2026-09-21 第二次 `! git push origin master` 完成（`e15fea8..87d082c`，含 16px、放慢 1.2× 及全部 docs 提交；Dependabot 仍 28 个，与 backlog 一致）。此后仅有本条 docs 提交在本地，随下次 push 顺带发布，非阻塞。
+**当前任务:** 无。仅剩用户的两件小事：看放慢后的庆祝效果（预览视频 `BV_TEST_CEL_PREVIEW3`，id 50；倍数不合适只改 `--duration-celebrate` 与 `CELEBRATION_MS` 两处），看完用红色「删除」清掉它（假 bvid，不会自动归档）。
 **关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
 
 **用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
