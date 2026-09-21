@@ -1051,3 +1051,23 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **约定变更：** 「归档 = 永久软隐藏，非删除」条补充「用户手动硬删除」的例外说明（见「跨 Phase 关键约定」）。
 
 **移交工作者：** T1–T5。完成后写交接块（含四项关键决策点；「安全相关」如实填：无新增输入面，复用既有 `requireAuth` + id 校验的端点），并通知全局者复审。
+
+## [2026-09-21 08:55] 全局者 — 审查通过：删除功能放行（commit `bac5b29`）
+
+**背景：** 工作者交接块（[2026-09-21 08:43] 条）交付 T1–T5。旧全局者条（[08:34] 定方向）与 [2026-09-11 04:42] 工作者条已归档 `context_history.md`。
+
+**审查动作（2026-09-21 08:44–08:55）：**
+- 安全预检 `security-scan.sh d2c5783`：命中 24 处，逐条看全是测试文件（`videos-delete.test.js` 的 token/auth/fetch/exec、`sync.test.js` 的测试内 SELECT）与相对导入 `../` —— 噪音；但工作者「安全相关」填了「用户输入」（URL `:id`）→ 按规则 invoke `critic`。
+- critic 报告：**可放行**。DELETE 路由校验未改（`Number.isInteger(id)&&id>0` + `requireAuth` + 参数化 SQL）、前端无 `v-html`/`innerHTML`、confirm 文案为纯文本、测试隔离且 JWT 来自 `vitest.config.js` 注入、无越权面。唯一提示 [LOW]：`SettingsPage.vue` 的 `ref(new Set())` + `add/delete` 可能不触发 `:disabled` 重渲染。
+- **全局者对该提示的裁定：不成立，不修改。** 用 `@vue/reactivity` 直接验证：`ref(new Set())` 下 effect 读 `has(7)`，`add` 与 `delete` 后各重跑一次（输出 `[false,true,false]`）→ Vue 3 对 Set 有集合级追踪。工作者 Playwright 也实测过设置页在途禁用。critic 该条是误报（判断依据：上述实测）。
+- 全局者独立复核：`git diff d2c5783 bac5b29` 逐行读前端全部改动（`videoDelete.js` / `HomePage.vue` / `SettingsPage.vue` / `main.css` / `tailwind.config.js` / `CHANGELOG.md`）符合 T1–T5 与「已定细节」1–7；`server/src` 零改动；`server` 干净 shell（`env -i`）44 例全绿（24+8+7+5，与工作者一致）；生产库 11 行、无 `BV_TEST%`；线上资源哈希与 dist 一致。
+
+**核实到的工作者交接偏差（已处理）：** 工作者疑虑 4 称「[09-11 工作者] 条在 `context_history.md` 已有归档」—— **不实**，`grep` 证实 history 中没有该条，只在 context.md。已由全局者补归档（history 里该条标题已注明「2026-09-21 补归档」）。另：工作者疑虑 5 指出我上条 09:05 时间戳晚于本机时钟 —— 属实（该条实为 08:34 写入，我凭估算填了 09:05），已订正。
+
+**偏离裁定：** ① 抽出 `utils/videoDelete.js` 共用文案 —— 接受（防两入口文案漂移）；② 构建先于复审上线 —— **接受但记为流程偏差**：`npm run build` 直接更新生产 `client/dist`，工作者在未过审前已让改动上线；本次内容审查后无问题，故无需回滚；今后涉及前端的任务，工作者应把「构建上线」放在复审之后或在交接里事先申明（不新增规则，只提醒；memory 已记载「build 即上线」）。
+
+**发布决定：放行** `bac5b29`。push 被守卫硬拒（双模型会话均无放行通道）→ 用户执行 `! git push origin master`；本条 docs commit 随之。
+
+**新增约定：** 已在「跨 Phase 关键约定」补「删除 = 用户手动硬删除」（08:34 已写，本轮确认无需再改）。
+
+**移交：** 无工作者待办。用户肉眼确认红底按钮观感（见「未验证的前提」④）。
