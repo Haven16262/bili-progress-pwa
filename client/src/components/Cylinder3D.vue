@@ -65,7 +65,7 @@ const props = defineProps({
 // First-load fill-up animation state
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const FILL_DURATION_MS = 800  // matches --duration-liquid
-const CELEBRATION_MS = 3000   // 与 CSS 三组庆祝动画时长一致
+const CELEBRATION_MS = 3600   // 与 CSS --duration-celebrate 一致（用户 2026-09-21：整体放慢 1.2×）
 const STAGGER_MS = 40         // 与 HomePage .cylinder-stagger 的 animation-delay 步长一致
 
 const rootEl = ref(null)
@@ -472,15 +472,15 @@ const bloomStyle = computed(() => ({
 
 /* ---- 首次庆祝（3s，一次性） ---- */
 .cylinder-wrapper.is-celebrating .cup-halo {
-  animation: celebrate-halo-burst 3s ease-out 1;
+  animation: celebrate-halo-burst var(--duration-celebrate) ease-out 1;
 }
 
 .cylinder-wrapper.is-celebrating .cup-arc {
-  animation: celebrate-arc-burst 3s linear 1;
+  animation: celebrate-arc-burst var(--duration-celebrate) linear 1;
 }
 
 .cylinder-wrapper.is-celebrating .progress-text {
-  animation: celebrate-sheen 3s ease-in-out 1;
+  animation: celebrate-sheen var(--duration-celebrate) ease-in-out 1;
 }
 
 @keyframes celebrate-halo-burst {
@@ -526,15 +526,15 @@ const bloomStyle = computed(() => ({
 /* ---- 悬停重放：仅精确指针设备，且不在庆祝中；reduced-motion 下不重放 ---- */
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
   .cylinder-wrapper.is-complete:not(.is-celebrating):hover .cup-halo {
-    animation: celebrate-halo-once 3s ease-out 1;
+    animation: celebrate-halo-once var(--duration-celebrate) ease-out 1;
   }
 
   .cylinder-wrapper.is-complete:not(.is-celebrating):hover .cup-arc {
-    animation: celebrate-arc-once 3s linear 1;
+    animation: celebrate-arc-once var(--duration-celebrate) linear 1;
   }
 
   .cylinder-wrapper.is-complete:not(.is-celebrating):hover .progress-text {
-    animation: celebrate-sheen-once 3s ease-in-out 1;
+    animation: celebrate-sheen-once var(--duration-celebrate) ease-in-out 1;
   }
 }
 

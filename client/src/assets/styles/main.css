@@ -130,6 +130,8 @@
   --duration-normal: 300ms;
   --duration-slow: 500ms;
   --duration-liquid: 800ms;
+  /* 100% 庆祝三组动画时长（改这里要同步 Cylinder3D.vue 的 CELEBRATION_MS；2026-09-21 用户要求整体放慢 1.2×：3s → 3.6s） */
+  --duration-celebrate: 3.6s;
 
   /* ---- Animation Easing ---- */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
