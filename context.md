@@ -9,8 +9,8 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。**「Dependabot 依赖安全清理」已实现并审查通过放行**（服务端锁文件 `05729f6`、客户端锁文件 `9083ae6`，本地未 push；审查记录见「本 Phase 历史」[2026-09-21 11:56] 条）。本地 `npm audit` 两份锁文件均 **0 漏洞**；GitHub 上告警是否归零要 **push 后**重扫才知道。
-**当前任务:** 无工作者待办。等用户按顺序做两件事：① **`! pm2 restart bili`**（服务端依赖已换新，重启后才在运行进程里生效；`start.sh` 会自愈 ABI）；重启后全局者会 `curl /api/ping` 核对；② **`! git push origin master`**；push 后全局者再拉一次 `gh api .../dependabot/alerts?state=open` 确认归零（GitHub 重扫可能延迟几分钟）。
+**阶段:** 无进行中 Phase。**「Dependabot 依赖安全清理」已闭环**：用户 2026-09-21 先 `! pm2 restart bili`（全局者核对：新进程 `348145` 启动于 11:57:44，晚于依赖落盘 11:44:50；`/api/ping` 连续 200、未鉴权 `/api/videos` 401、库 10 行、无新错误日志），再 `! git push origin master`（`87d082c..34740c7`）；全局者随后用 `gh api` 核对 GitHub：**open 15 → 0（约 30 秒内重扫完成）**，28 个告警被修复关闭。push 输出里那句「found 28 vulnerabilities」是扫描前的旧数字，不作数。此后仅本条 docs 提交在本地，随下次 push 顺带发布。
+**当前任务:** 无。工作者无待办；用户无待办。
 **工作者完成状态（2026-09-21 11:57）：** 依赖清理 T1–T5 全部完成 —— 两份锁文件本地 `npm audit` 均为 **0 漏洞**；server `05729f6` + client `9083ae6`（`package.json` 逐字节未改，**未 push**，**未重启服务**，**未重建 client/dist**）。**服务端依赖需用户 `! pm2 restart bili` 才在运行进程生效**；告警真正关闭 = push 后 GitHub 重扫。交接见「本 Phase 历史」[11:57] 条。
 **关键依据文档（先读，含 14 包×告警号表、可达性核实、已知雷区）:** `docs/dependabot-triage-2026-09-21.md`。
 
