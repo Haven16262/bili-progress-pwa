@@ -1210,3 +1210,31 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **如实收回的一个说法：** plan 009 里「数字 20px/700 属 WCAG 大字 → 阈值 3:1」在 16px 下不再成立（详见「未验证的前提」与 backlog）。底色不改，理由与代价已写明。
 
 **移交工作者：** T6 → T7 → 交接（T8 构建等复审）。本任务为纯 CSS，无新增输入面，「安全相关」如实填「无」即可。
+
+## [2026-09-21 11:24] 工作者 — T6/T7 完成：数字 16px + 静态去柔光（按约定未构建）
+
+**完成情况：**
+- **T6（commit `2abf7cf`，仅 CSS）**：`.is-complete .progress-text` 的 `font-size: 20px → 16px`；静态终态 `filter` 的 `var(--celebrate-glow)` → `var(--celebrate-glow-none)`；`celebrate-sheen` 的 100% 与 `celebrate-sheen-once` 的 0%/100% 同步换 `glow-none`（filter 函数列表保持等长，避免离散跳变）；`glow-strong` 峰值、深紫描边、黑影、扫光带、光环、亮弧、`scale` 全部未动。T6⑤ 的孤儿 token 删除已执行：确认 `--celebrate-glow` 改动后零引用，从 `main.css` 删掉；`tailwind.config.js` 里只有三色 `celebrate`（无 glow 相关项），无需改动。
+- **T7 验证（Playwright，脚本 `/tmp/bili-verify/bili-verify-celebrate-t6.mjs`，未进仓库）—— 16/16 通过**：
+  - (a) 庆祝态数字计算字号 = **16px**；字族 `Manrope, -apple-system, …`、字重 `700` ✓
+  - (b) 静态 filter = `drop-shadow(rgba(0,0,0,.5) 0 1px 3px) drop-shadow(rgba(59,7,100,.85) 0 0 1.2px) drop-shadow(rgba(129,140,248,0) 0 0 0) drop-shadow(rgba(232,121,249,0) 0 0 0)` —— 描边与黑影保留、两处柔光 alpha 归零、无 5px/11px 光晕 ✓
+  - (c) 首次庆祝出现 `.is-celebrating`、**3070ms** 后消失；**结束瞬间前后两帧 `filter` 计算值逐字一致**（rAF 逐帧采样，前帧 = 后帧）→ 无跳变 ✓
+  - (d) 悬停重放仍生效（`celebrate-sheen-once` 在跑、柔光 11px 回来）；移开鼠标后动画 `none`、filter 与静态逐字一致 ✓
+  - (e) reduced-motion：不庆祝，静态终态正常（16px + 无柔光）✓
+  - (f) **截图路径**：`/tmp/bili-verify-shots/10-static-16px-375.png`、`10-celebrating-16px-375.png`、`10-static-16px-1440.png`、`10-celebrating-16px-1440.png` —— 100% 杯与 74% 对照杯**同一行并排**（375 与 1440 实测 `aY === cY`），静态一张、庆祝中一张
+  - 测试数据只用假 bvid（`BV_TEST_CEL_0921A` 100% / `BV_TEST_CEL_0921C` 74%），**未写真实记录**；测完清理，库行数回到测试前（首页 8 → 8）、无残留 ✓
+- **T8 未执行（按约定）**：没有构建，`client/dist` 仍是 11:03 那版 → **生产当前是 20px + 静态柔光的旧版**。等复审通过授权后再 `cd client && npm run build`。
+- **预览行换新**：上一轮给用户验收的 `BV_TEST_CEL_PREVIEW` 已删（改版后它在用户设备上已记「已庆祝」不会重播；且它占着一条 100% 位置，375 截图无法与 74% 杯并排），新建 `BV_TEST_CEL_PREVIEW2`（进度 100，标题「庆祝动效预览 v2 · 看完可用红按钮删除」）——新 id 在用户设备上是全新记录，**能看到完整的改版后庆祝**；「当前状态」的预览行说明已同步更新。
+
+**任务进度：**
+- [x] T6 数字改 16px + 静态去柔光
+- [x] T7 验证（16/16）
+- [ ] T8 构建（按约定不构建，等复审授权）
+
+**关键决策点：**
+- 架构/接口变动：无（纯 CSS 改动 + 删一个孤儿 token）。
+- 安全相关：无（输入面/外部请求/存储面均未变；`localStorage` 逻辑未动）。
+- 偏离原计划：无（T6 四项逐条照做；删 token 是 T6⑤ 明确授权的「只删本轮弄成孤儿的」）。
+- 未解决的疑虑：「结束无跳变」的验证方式说明 —— 用 rAF 逐帧采样 `filter` 计算值并比较 `.is-celebrating` 消失前后两帧，实测两帧字符串完全相同；若全局者要更强的证据（如逐帧差值曲线）可再取，我判断当前已足够。
+
+**顺带变动：** 按工作者写入流程第一步，已在「当前状态」勾选 T6/T7、更新预览行说明并加一行完成状态；未改动全局者正文。

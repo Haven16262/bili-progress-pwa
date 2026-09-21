@@ -9,8 +9,8 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。前序三个插入任务已闭环并上线、已 push（`origin/master` = `e15fea8`）。**「庆祝态数字调整 16px + 静态去柔光」已实现并审查通过放行**（commit `2abf7cf`；审查记录见「本 Phase 历史」[2026-09-21 11:25] 条），**等工作者构建上线（T8）**；`client/dist` 目前仍是 11:03 的旧版（20px + 静态柔光）。本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf` 及其后的 docs 提交。
-**当前任务:** 工作者执行 **T8：构建上线**（`cd client && npm run build`，不带 `--outDir`；构建后核对线上 index.html 哈希与 dist 一致、新 CSS 不再含 `celebrate-glow:`）。之后 = 用户看一眼上线后的效果（生产库里有预览视频 `BV_TEST_CEL_PREVIEW2`，标题写明「看完可用红按钮删除」）；看完用红色「删除」清掉它，再 `! git push origin master`。
+**阶段:** 无进行中 Phase。四个插入任务均已闭环：412 冻结、删除功能、庆祝动效 + 归档 7 天（这三项已 push，`origin/master` = `e15fea8`）；**庆祝态数字 16px + 静态去柔光已审查通过并构建上线**（commit `2abf7cf`；全局者 2026-09-21 11:27 核对线上 index.html 引用 `index-B5zmcZg6.js` / `index-DF-MfqQn.css` 与 `client/dist` 一致，线上 CSS 的 `--celebrate-glow` 只剩 `-none`/`-strong`）。本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf`、`209b4df` 及其后的 docs 提交。
+**当前任务:** 无。等用户：① 看一眼上线后的庆祝态数字（首页预览视频 `BV_TEST_CEL_PREVIEW2`；若首次庆祝没看到——可能是在构建前已打开过而记了「已庆祝」——桌面端**悬停该杯**即可重放，或告诉全局者换新预览 id）；② 用红色「删除」清掉预览视频（它不会自动归档，见 11:25 审查条）；③ `! git push origin master`。
 **关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
 
 **用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
@@ -27,7 +27,7 @@
 - [x] **T5 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（**不带** `--outDir`，这次要写 `client/dist`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，其引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 含 `celebrate-`；**不 push**（守卫硬拒）；交接里写一行结果即可，不必再写完整交接块（按 WORKFLOW 仍需先更新「当前状态」再追加一条简短历史）。
 - [x] **T6 数字改 16px + 静态去柔光（`client/src/components/Cylinder3D.vue`，仅 CSS）**：① `.cylinder-wrapper.is-complete .progress-text` 的 `font-size: 20px` → `16px`。② 静态态 `filter` 中把 `var(--celebrate-glow)` 换成 `var(--celebrate-glow-none)`（**不要直接删掉这一项**：CSS `filter` 在关键帧之间插值时，两端的滤镜函数列表必须逐项同构，删了会退化成离散跳变、庆祝结束时数字会「啪」地变一下）。③ 关键帧 `celebrate-sheen` 的 100% 与 `celebrate-sheen-once` 的 0% / 100% 里的 `var(--celebrate-glow)` 同样换成 `var(--celebrate-glow-none)`，使动画的起止态与新的静态态一致；`glow-strong` 峰值保持不变（庆祝/悬停时仍有柔光）。④ **深紫描边 `--celebrate-outline`、黑影、扫光带、光环、亮弧、`scale` 弹一下全部不动。**（完成标准：静态态计算样式里柔光层 alpha 为 0；庆祝结束后数字与静态态视觉无跳变；`--celebrate-glow` 若已无引用，则删掉这个 token 及 tailwind 中无关联的部分——只删本轮弄成孤儿的，别的不碰）
 - [x] **T7 验证（Playwright，沿用 `/tmp/bili-verify/bili-verify-celebrate.mjs` 的做法；测试视频只用假 bvid `BV_TEST_CEL_*`，测完清理，库行数前后一致；不得写真实记录）**：(a) 庆祝态数字计算字号 = 16px、字族/字重仍是 Manrope 700；(b) 静态态 `filter` 里无非零柔光；(c) 首次庆祝：出现 `.is-celebrating`、3s 后消失，且**结束瞬间前后取样两帧的 `filter` 计算值一致**（无跳变）；(d) 悬停重放仍生效（`hover:hover` 下）且结束后回到静态；(e) reduced-motion 下仍不播、静态终态正常；(f) 375 与 1440 宽截图各两张：**庆祝态的杯子与一个普通杯（如 74%）并排**，静态一张、庆祝中一张，存 `/tmp`，路径写进交接。（完成标准：全过 + 截图路径）
-- [ ] **T8 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 里搜不到 `--celebrate-glow:`（只剩 `-strong`/`-none`）；**不 push**；交接一行结果即可（仍需先更新「当前状态」再追加一条简短历史）。
+- [x] **T8 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 里搜不到 `--celebrate-glow:`（只剩 `-strong`/`-none`）；**不 push**；交接一行结果即可（仍需先更新「当前状态」再追加一条简短历史）。
 
 **未验证的前提:**（2026-09-21 11:02 复审后）
 - **【本轮 2026-09-21 11:20】已核实**：庆祝态与其它杯的数字**是同一字体**（全局者用真实 Manrope 渲染对照：计算样式两边都是 `Manrope 700`，代码里庆祝态没有改 `font-family`/`font-weight`）；突兀来自 ① 字号 12px→20px（放大后 Manrope 的几何圆润感露出来）与 ② 描边 + 双层柔光让笔画边缘发虚、③ 淡紫渐变不是纯白。对照图（7 种呈现）已发给用户；用户选「16px + 静态去柔光」。
@@ -80,34 +80,6 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-21 11:24] 工作者 — T6/T7 完成：数字 16px + 静态去柔光（按约定未构建）
-
-**完成情况：**
-- **T6（commit `2abf7cf`，仅 CSS）**：`.is-complete .progress-text` 的 `font-size: 20px → 16px`；静态终态 `filter` 的 `var(--celebrate-glow)` → `var(--celebrate-glow-none)`；`celebrate-sheen` 的 100% 与 `celebrate-sheen-once` 的 0%/100% 同步换 `glow-none`（filter 函数列表保持等长，避免离散跳变）；`glow-strong` 峰值、深紫描边、黑影、扫光带、光环、亮弧、`scale` 全部未动。T6⑤ 的孤儿 token 删除已执行：确认 `--celebrate-glow` 改动后零引用，从 `main.css` 删掉；`tailwind.config.js` 里只有三色 `celebrate`（无 glow 相关项），无需改动。
-- **T7 验证（Playwright，脚本 `/tmp/bili-verify/bili-verify-celebrate-t6.mjs`，未进仓库）—— 16/16 通过**：
-  - (a) 庆祝态数字计算字号 = **16px**；字族 `Manrope, -apple-system, …`、字重 `700` ✓
-  - (b) 静态 filter = `drop-shadow(rgba(0,0,0,.5) 0 1px 3px) drop-shadow(rgba(59,7,100,.85) 0 0 1.2px) drop-shadow(rgba(129,140,248,0) 0 0 0) drop-shadow(rgba(232,121,249,0) 0 0 0)` —— 描边与黑影保留、两处柔光 alpha 归零、无 5px/11px 光晕 ✓
-  - (c) 首次庆祝出现 `.is-celebrating`、**3070ms** 后消失；**结束瞬间前后两帧 `filter` 计算值逐字一致**（rAF 逐帧采样，前帧 = 后帧）→ 无跳变 ✓
-  - (d) 悬停重放仍生效（`celebrate-sheen-once` 在跑、柔光 11px 回来）；移开鼠标后动画 `none`、filter 与静态逐字一致 ✓
-  - (e) reduced-motion：不庆祝，静态终态正常（16px + 无柔光）✓
-  - (f) **截图路径**：`/tmp/bili-verify-shots/10-static-16px-375.png`、`10-celebrating-16px-375.png`、`10-static-16px-1440.png`、`10-celebrating-16px-1440.png` —— 100% 杯与 74% 对照杯**同一行并排**（375 与 1440 实测 `aY === cY`），静态一张、庆祝中一张
-  - 测试数据只用假 bvid（`BV_TEST_CEL_0921A` 100% / `BV_TEST_CEL_0921C` 74%），**未写真实记录**；测完清理，库行数回到测试前（首页 8 → 8）、无残留 ✓
-- **T8 未执行（按约定）**：没有构建，`client/dist` 仍是 11:03 那版 → **生产当前是 20px + 静态柔光的旧版**。等复审通过授权后再 `cd client && npm run build`。
-- **预览行换新**：上一轮给用户验收的 `BV_TEST_CEL_PREVIEW` 已删（改版后它在用户设备上已记「已庆祝」不会重播；且它占着一条 100% 位置，375 截图无法与 74% 杯并排），新建 `BV_TEST_CEL_PREVIEW2`（进度 100，标题「庆祝动效预览 v2 · 看完可用红按钮删除」）——新 id 在用户设备上是全新记录，**能看到完整的改版后庆祝**；「当前状态」的预览行说明已同步更新。
-
-**任务进度：**
-- [x] T6 数字改 16px + 静态去柔光
-- [x] T7 验证（16/16）
-- [ ] T8 构建（按约定不构建，等复审授权）
-
-**关键决策点：**
-- 架构/接口变动：无（纯 CSS 改动 + 删一个孤儿 token）。
-- 安全相关：无（输入面/外部请求/存储面均未变；`localStorage` 逻辑未动）。
-- 偏离原计划：无（T6 四项逐条照做；删 token 是 T6⑤ 明确授权的「只删本轮弄成孤儿的」）。
-- 未解决的疑虑：「结束无跳变」的验证方式说明 —— 用 rAF 逐帧采样 `filter` 计算值并比较 `.is-celebrating` 消失前后两帧，实测两帧字符串完全相同；若全局者要更强的证据（如逐帧差值曲线）可再取，我判断当前已足够。
-
-**顺带变动：** 按工作者写入流程第一步，已在「当前状态」勾选 T6/T7、更新预览行说明并加一行完成状态；未改动全局者正文。
-
 ## [2026-09-21 11:25] 全局者 — 审查通过：庆祝态数字 16px + 静态去柔光放行（commit `2abf7cf`）
 
 **背景：** 工作者交接块（[2026-09-21 11:24] 条）交付 T6/T7；T8 按约定未构建。旧条：[11:03] 工作者（T5）、[11:20] 全局者（本任务决策）已归档 `context_history.md`。
@@ -125,3 +97,11 @@
 **发布决定：放行** `2abf7cf`。授权工作者执行 T8（构建上线）。push 仍由用户 `! git push origin master`（本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf` 及其后 docs 提交）。
 
 **移交：** 工作者 T8 → 用户看效果、删预览视频 → 用户 push。
+
+## [2026-09-21 11:26] 工作者 — T8 构建上线完成
+
+**完成情况：** `cd client && npm run build`（不带 `--outDir`）**绿** → `dist/assets/index-DF-MfqQn.css`（45.71 kB）+ `index-B5zmcZg6.js`（120.96 kB）；curl 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` 逐字一致、两资源均 HTTP 200；线上 CSS 中 `--celebrate-glow` 相关只剩 `-none:` 与 `-strong:`（裸 `--celebrate-glow:` 计数 **0**）；`.is-complete .progress-text[data-v-…]{font-size:16px;…}` —— **16px + 静态去柔光版已上线**。**未 push**。
+**任务进度：** - [x] T8 构建上线
+**关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：若用户在本次构建**之前**打开过 App，`BV_TEST_CEL_PREVIEW2` 会按旧样式播掉并在其设备记「已庆祝」——真出现这种情况我再换一个新预览 id（一行操作），不影响用户自行按标题里的说明删除旧行。
+
+**顺带变动：** 已按工作者写入流程第一步勾选 T8 并加完成状态行；未改动全局者正文。
