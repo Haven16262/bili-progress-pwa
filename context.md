@@ -9,8 +9,8 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。庆祝态数字 16px 已上线；**用户随后直接向工作者提出「动效放慢 1.2×」**，工作者已实现（commit `3786e9b`，3s → 3.6s）并在 dev 验证 17/17，**已审查通过放行，等工作者构建上线（T9）**；`client/dist` 目前仍是 11:26 的 3s 版。本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf`、`209b4df`、`cf60a2d`、`3786e9b` 及其后的 docs 提交。审查记录见「本 Phase 历史」[2026-09-21 11:34] 条。
-**当前任务:** 工作者执行 **T9：构建上线**（`cd client && npm run build`，不带 `--outDir`；核对线上 index.html 哈希与 `client/dist` 一致、线上 CSS 含 `--duration-celebrate:3.6s`）。构建**之后**才可新建预览视频（假 bvid，如 `BV_TEST_CEL_PREVIEW3`，进度 100，标题写明「看完可用红按钮删除」），并在交接里**写明新 bvid**——不要提前建，否则用户在构建前打开会按旧版播掉。之后 = 用户看效果、删预览视频、`! git push origin master`。
+**阶段:** 无进行中 Phase。庆祝动效相关的全部迭代已上线：16px + 静态去柔光、放慢 1.2×（3.6s，`client/dist` = `index-B1iCjU_8.js` / `index-Czx-wwLI.css`，全局者 2026-09-21 11:36 核对线上 index.html 哈希与 dist 一致、六处动画都引用 `--duration-celebrate`）。本地未 push：`11ee9aa`、`8f230bb`、`2abf7cf`、`209b4df`、`cf60a2d`、`3786e9b`、`bdcea9a` 及其后的 docs 提交（其中只有 `2abf7cf`、`3786e9b` 是代码）。
+**当前任务:** 无。等用户：① 看放慢后的庆祝（首页预览视频 `BV_TEST_CEL_PREVIEW3`，id 50，假 bvid、不会被自动归档；桌面端悬停可重放）；倍数不合适告诉全局者——只改 `--duration-celebrate` 与 `Cylinder3D.vue` 的 `CELEBRATION_MS` 两处；② 看完用红色「删除」清掉预览视频；③ `! git push origin master`。
 **关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
 
 **用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
@@ -28,7 +28,7 @@
 - [x] **T6 数字改 16px + 静态去柔光（`client/src/components/Cylinder3D.vue`，仅 CSS）**：① `.cylinder-wrapper.is-complete .progress-text` 的 `font-size: 20px` → `16px`。② 静态态 `filter` 中把 `var(--celebrate-glow)` 换成 `var(--celebrate-glow-none)`（**不要直接删掉这一项**：CSS `filter` 在关键帧之间插值时，两端的滤镜函数列表必须逐项同构，删了会退化成离散跳变、庆祝结束时数字会「啪」地变一下）。③ 关键帧 `celebrate-sheen` 的 100% 与 `celebrate-sheen-once` 的 0% / 100% 里的 `var(--celebrate-glow)` 同样换成 `var(--celebrate-glow-none)`，使动画的起止态与新的静态态一致；`glow-strong` 峰值保持不变（庆祝/悬停时仍有柔光）。④ **深紫描边 `--celebrate-outline`、黑影、扫光带、光环、亮弧、`scale` 弹一下全部不动。**（完成标准：静态态计算样式里柔光层 alpha 为 0；庆祝结束后数字与静态态视觉无跳变；`--celebrate-glow` 若已无引用，则删掉这个 token 及 tailwind 中无关联的部分——只删本轮弄成孤儿的，别的不碰）
 - [x] **T7 验证（Playwright，沿用 `/tmp/bili-verify/bili-verify-celebrate.mjs` 的做法；测试视频只用假 bvid `BV_TEST_CEL_*`，测完清理，库行数前后一致；不得写真实记录）**：(a) 庆祝态数字计算字号 = 16px、字族/字重仍是 Manrope 700；(b) 静态态 `filter` 里无非零柔光；(c) 首次庆祝：出现 `.is-celebrating`、3s 后消失，且**结束瞬间前后取样两帧的 `filter` 计算值一致**（无跳变）；(d) 悬停重放仍生效（`hover:hover` 下）且结束后回到静态；(e) reduced-motion 下仍不播、静态终态正常；(f) 375 与 1440 宽截图各两张：**庆祝态的杯子与一个普通杯（如 74%）并排**，静态一张、庆祝中一张，存 `/tmp`，路径写进交接。（完成标准：全过 + 截图路径）
 - [x] **T8 构建上线（复审已通过，授权执行）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html，引用的 `index-*.js/css` 哈希与 `client/dist/assets` 一致；新 CSS 里搜不到 `--celebrate-glow:`（只剩 `-strong`/`-none`）；**不 push**；交接一行结果即可（仍需先更新「当前状态」再追加一条简短历史）。
-- [ ] **T9 构建上线（复审已通过，授权执行；本项为「动效放慢 1.2×」这一用户直接提出的小任务的收尾）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` 一致；线上 CSS 搜得到 `--duration-celebrate:3.6s`；**不 push**；构建完成后按上面的规则建预览视频并写进交接。交接一行结果即可（仍需先更新「当前状态」再追加简短历史）。
+- [x] **T9 构建上线（复审已通过，授权执行；本项为「动效放慢 1.2×」这一用户直接提出的小任务的收尾）**：`cd client && npm run build`（不带 `--outDir`）。完成标准：构建绿；`curl` 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` 一致；线上 CSS 搜得到 `--duration-celebrate:3.6s`；**不 push**；构建完成后按上面的规则建预览视频并写进交接。交接一行结果即可（仍需先更新「当前状态」再追加简短历史）。
 
 **未验证的前提:**（2026-09-21 11:02 复审后）
 - **【本轮 2026-09-21 11:20】已核实**：庆祝态与其它杯的数字**是同一字体**（全局者用真实 Manrope 渲染对照：计算样式两边都是 `Manrope 700`，代码里庆祝态没有改 `font-family`/`font-weight`）；突兀来自 ① 字号 12px→20px（放大后 Manrope 的几何圆润感露出来）与 ② 描边 + 双层柔光让笔画边缘发虚、③ 淡紫渐变不是纯白。对照图（7 种呈现）已发给用户；用户选「16px + 静态去柔光」。
@@ -81,29 +81,6 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-21 11:33] 工作者 — 庆祝动效放慢 1.2×（用户直接提出；dev 已验证，未构建）
-
-**背景：** 用户 2026-09-21 验收 11:26 上线的版本后反馈「字体没问题了，但是感觉动效播放有点过快，大约慢个1.2倍吧，或者其他倍数」。取用户给的 **1.2×**（3s → 3.6s）。
-
-**完成情况：**
-- `Cylinder3D.vue` 六处动画（3 组庆祝 burst + 3 组悬停重放 once）3s → **3.6s**；关键帧百分比结构未动（只改时长，动画形状与节奏比例不变）；`CELEBRATION_MS` 3000 → **3600**（仍留 +60ms 余量）。
-- 新增 token `--duration-celebrate: 3.6s`（`main.css` 的 Animation Duration 段，沿用项目 `--duration-*` 惯例），六处 `animation` 全部引用它；token 注释写明「改这里要同步 Cylinder3D 的 CELEBRATION_MS」——**下次若用户还要调倍数，只改 token + 那一行常量**。
-- **T7 同款脚本重跑 —— 17/17 通过**：三组动画计算时长均 `3.6s`；庆祝窗口实测 **3669ms**；结束瞬间前后两帧 `filter` 逐字一致（无跳变）；悬停重放仍生效并回到静态；reduced-motion 不播、静态正常；375/1440 截图（100% 杯与 74% 杯同行并排）已按 3.6s 重拍，路径同前：`/tmp/bili-verify-shots/10-static-16px-{375,1440}.png`、`10-celebrating-16px-{375,1440}.png`。测试数据只用假 bvid（`BV_TEST_CEL_0921A/C`），测完清理，库行数回到测试前（首页 8 → 8）✓。
-- **未构建**：`client/dist` 仍是 11:26 那一版（3s）→ 生产当前仍是 3s 版。等复审放行后 `cd client && npm run build`。
-- **预览行**：上一轮给用户验收的 `BV_TEST_CEL_PREVIEW2` 已随本轮验证清理删除（用户已看过它，且它在用户设备上已记「已庆祝」不会重播）；**新预览行（PREVIEW3）等构建上线后再建**——现在建的话，用户若在构建前打开 App 会按 3s 旧版播掉。建好后我把新 bvid 写进交接。
-
-**任务进度：**（本轮为新增小任务，不在 T1–T8 清单内）
-- [x] 动效放慢 1.2×（commit `3786e9b`）+ dev 验证
-- [ ] 构建上线（等复审授权）
-
-**关键决策点：**
-- 架构/接口变动：新增 CSS token `--duration-celebrate`（六处 animation 改引用它）；其余无。
-- 安全相关：无（纯时长改动，无输入面/请求/存储面变化）。
-- 偏离原计划：无（用户直接提出；倍数取用户给的 1.2，用户原话允许「其他倍数」）。
-- 未解决的疑虑：1.2× 是否合适最终以用户肉眼为准；若要再调，改 `--duration-celebrate` 与 `CELEBRATION_MS` 两处（token 注释已写明联动关系）。
-
-**顺带变动：** 已按工作者写入流程第一步加一行完成状态；未改动全局者正文。
-
 ## [2026-09-21 11:34] 全局者 — 审查通过：庆祝动效放慢 1.2× 放行（commit `3786e9b`）
 
 **背景：** 用户 2026-09-21 验收 11:26 上线的 16px 版后**直接对工作者**说「字体没问题了，但动效播放有点过快，大约慢个 1.2 倍吧，或者其他倍数」（「字体没问题了」= 上一任务验收通过）。工作者按用户原话取 1.2×（3s → 3.6s）实现，并在交接块如实写明来源。旧条：[11:25] 全局者（16px 审查）、[11:26] 工作者（T8）已归档 `context_history.md`。
@@ -123,3 +100,12 @@
 **发布决定：放行** `3786e9b`。授权工作者执行 T9（构建上线）。push 仍由用户 `! git push origin master`。
 
 **移交：** 工作者 T9 → 用户看效果、删预览视频 → 用户 push。plan 009 的修订说明已补「时长 3.6s」。
+
+## [2026-09-21 11:35] 工作者 — T9 构建上线完成（3.6s 版）+ 预览行 v3
+
+**完成情况：** `cd client && npm run build`（不带 `--outDir`）**绿** → `dist/assets/index-Czx-wwLI.css`（45.87 kB）+ `index-B1iCjU_8.js`（120.97 kB）；curl 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` **逐字一致**、两资源均 HTTP 200；线上 CSS 搜到 `--duration-celebrate: 3.6s`（压缩后冒号后留了一个空格，值与 T9 要求一致），且六处 `animation`（3 组庆祝 burst + 3 组悬停重放 once）都写成 `var(--duration-celebrate)` → **慢 1.2× 版已上线**。**未 push**。
+**预览行（构建之后创建，按 T9 规则）**：**`BV_TEST_CEL_PREVIEW3`**，标题「庆祝动效预览 v3（慢 1.2×）· 看完可用红按钮删除」，`progress 100`。假 bvid，永不出现在 B站 历史里，同步不会碰它；用户看完可用首页红色「删除」清掉。（注：上一轮的 `BV_TEST_CEL_PREVIEW2` 已随 11:33 那轮验证清理删除，全局者审查条已接受。）
+**任务进度：** - [x] T9 构建上线
+**关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：无（1.2× 是否合适由用户肉眼定；若要再调，改 `--duration-celebrate` + `CELEBRATION_MS` 两处即可，token 注释已写明联动）。
+
+**顺带变动：** 已按工作者写入流程第一步勾选 T9 并加完成状态行（「当前状态」里的预览行段落此前已被全局者重写，故预览 bvid 记在本条与状态行里）；未改动全局者正文。
