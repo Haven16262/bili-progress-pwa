@@ -9,9 +9,8 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。三个插入任务：「每日同步 412 冻结」已发布；「补全删除功能」已审查、前端已在线；**「100% 视频庆祝动效 + 归档 3→7 天」已实现并审查通过放行**（`c78c2a6` 归档 7 天 + `a3a462e` 庆祝动效；审查记录见「本 Phase 历史」[2026-09-21 11:02] 条），**等工作者构建上线（T5）**。本地未 push 的提交（用户 `! git push origin master`）：`bac5b29`、`6824adb`、`3b0dff6`、`9a3fbeb`、`c78c2a6`、`a3a462e` 及其后的 docs 提交。
-**当前任务:** 工作者执行 **T5：构建上线**（`cd client && npm run build`，静态文件按请求读盘，无需 pm2 restart；构建后核对线上 index.html 引用的资源哈希与 `client/dist/assets` 一致）。之后 = 用户在真机/浏览器**肉眼确认**庆祝动效观感（见「未验证的前提」），再 `! git push origin master`。
-**工作者完成状态（2026-09-21 11:03）：** T5 构建上线完成 —— `cd client && npm run build` 绿，生产 index.html 引用的 `index-DdohwUDL.css` / `index-DkmSAcs0.js` 与 `client/dist/assets` 一致且均 200，新 CSS 含 `celebrate-`；**未 push**（待用户真机肉眼确认观感后 `! git push origin master`）。交接见「本 Phase 历史」[11:03] 条。
+**阶段:** 无进行中 Phase。三个插入任务均已闭环并上线：「每日同步 412 冻结」（已发布）、「补全删除功能」（已上线）、「100% 视频庆祝动效 + 归档 3→7 天」（审查通过，**T5 构建已上线**：`client/dist` 资源 `index-DkmSAcs0.js` / `index-DdohwUDL.css`，全局者 2026-09-21 11:05 核对线上 index.html 哈希与 dist 一致、新 CSS 含 `celebrate-`）。**待办只剩用户两件事**：肉眼验收庆祝动效、`! git push origin master`（本地未 push：`bac5b29`、`6824adb`、`3b0dff6`、`9a3fbeb`、`c78c2a6`、`a3a462e`、`4765865`、`67634cf` 及其后的 docs 提交）。
+**当前任务:** 无。等用户：① 真机/浏览器肉眼验收庆祝动效（库里现无 100% 视频，可对任一视频点「标记为已看完」触发；看点：庆祝态数字 20px 与其它杯 12px 的大小对比、光环强度、亮弧转速）；② `! git push origin master`。验收不通过 → 回全局者，方向是调光的强度/光环大小，不是压暗数字。
 **关键依据文档（先读这份，内含全部规格、数值来源、验证清单）:** `plans/009-celebrate-100.md`。设计稿：画布 https://claude.ai/artifact/PMe8GF4r6JVmM4dmKwMXig 第 ② 块，源已入库 `plans/celebrate-100/reference-A+C-gradient.dc.html`（CSS 数值以它为准；**注意计划里列出的三处需偏离参考稿或需实测的地方**：数字底色渐变必须提亮（已实算 `#ddd6fe`/`#f5d0fe` 对中部液体仅 2.62/2.65 <3:1）、参考稿是 6s 循环需压成 3s 一次、光环 200×300 可能被手机横滚容器裁切）。
 
 **用户已定的产品决策（不要重新讨论，详见 plan 009 顶部）:**
@@ -35,6 +34,7 @@
 - **已核实（同日）**：库现有 10 行（首页 8 + 已归档 2）；此前 11→10 是用户用新上线的删除功能删掉了那条「意外加入的视频」（用户在本轮对话中亲口说明，工作者对账发现的疑虑 1 由此闭环）。
 
 **backlog（下次开 Phase 顺手项，非紧急）:**
+- 【2026-09-21 新增】部署后旧资源路径（如 `/assets/index-<旧哈希>.js`）返回 SPA 兜底 HTML（200 + `text/html`）而非 404 —— 工作者观察，**既有行为、非本轮引入**（2026-09-03 轮同一机制）；PWA `autoUpdate` 下次加载即更新，低优先，仅当出现「部署后白屏」的反馈再排查
 - 【2026-09-11 新增】`bilibili.test.js` 补断言：降级路径第二请求的凭据头（Cookie/UA/Referer）透传一致性 —— critic LOW（回归检测缺口，非现存漏洞）
 - 【2026-09-11 新增】「窗口外视频刷新策略」：B站 历史窗口滑动 → 长期未观看的在追视频自然停更（现语义；本次全量 8 个中 7 个已滑出窗口）。如做定向刷新，须受「B站 请求节制」约定约束
 - 真机性能确认：液体玻璃 `backdrop-filter`（headless 4× throttle 已测；详情见上一 Phase 关闭条目）
@@ -73,57 +73,6 @@
 ## 本 Phase 历史
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
-
-## [2026-09-21 10:55] 工作者 — 庆祝动效 + 归档 7 天：实现 + 端到端验证完成
-
-**完成情况：**
-- **Part A（commit `c78c2a6`）**：`sync.js` 两处 `newCount >= 3` 提为 `ARCHIVE_AFTER_DAYS = 7`（自然 100% 与 5b 手动完成两条路径共用）；`SettingsPage.vue` 文案改 7；测试：原「达到 3 次计数」用例阈值 2→6，新增两条路径各一例「第 6 次不归档、第 7 次归档」——**先红后绿**（阈值仍为 3 时两例均 `expected 1 to be +0` 失败，改常量后转绿）；干净 shell（`env -i`）46 例全绿。
-- **Part B（commit `a3a462e`）**：`Cylinder3D.vue`（prop `videoId`、`is-complete`/`is-celebrating`、光环/亮弧、数字淡紫渐变、起播时机、RM）+ 新 `utils/celebrated.js` + `HomePage.vue`（传 id、prune）+ `main.css` token + `tailwind.config.js`。
-- **真实数字字号（T2 第一步实测）**：`.progress-text` 计算值 **12px**（390 与 1440 两宽一致；父元素 `.cylinder-glass` = 16px，`clamp(12px,16%,18px)` 的 16% = 2.56px，落到下限 12px）。与全局者判断一致，继续执行；庆祝态按计划用 20px。
-- **每个底色停点的实算对比度**（WCAG 相对亮度，声明色静态模型，算法与 `plans/ui-refresh/check-contrast.mjs` 同源；已自检复现全局者表的 3.31/3.06/2.62）：
-  最终底色 `linear-gradient(90deg,#f5f3ff 0%,#ede9fe 35%,#f5f3ff 70%,#ede9fe 100%)`（沿渐变逐点采样取最差）：
-
-  | 数字底色 | 上 `rgb(196 142 255)` | 中 `rgb(172 97 245)` | 下 `rgb(147 51 234)` |
-  |---|---|---|---|
-  | `#f5f3ff`（主停点） | 2.21 | **3.31** | 4.91 |
-  | `#ede9fe`（辅停点） | 2.04 | **3.06** | 4.53 |
-  | 整条渐变最差 | 2.04 | **3.06** | 4.53 |
-
-  判据是「对**杯中列** ≥3:1」（数字位于杯高 50%）→ **达标（3.06）**。对上端 2.04 <3 是几何事实（数字不在杯口）；若要求三端都达标，需把数字压到近纯白——**请全局者裁定**。参考稿的 `#ddd6fe`/`#f5d0fe` 未采用（2.62/2.65 不达标）。
-- **光环在手机横滚容器里是否被裁（实测，参考稿原尺寸）**：**被裁**。`.home-grid-scroll`（`overflow-x:auto`）把 200×300 的光环裁掉：元素上溢 36.6px、左右各溢 30px；320 宽下还会撑出横向滚动。按计划「缩小光环 / 给容器加 padding」两条并做：
-  ① 光环/亮弧缩到参考稿 **92%（184×276）**，遮罩百分比按同比例反算为 **65%→80%** —— **环带（遮罩不透明段）的绝对位置与参考稿逐点一致**，只收窄外侧渐隐区；
-  ② `.home-grid-scroll` 加 `padding: 16px 16px 8px` + 等量 `margin: -16px -16px 0`（净位移 0：卡片位置、滚动起点都不变）。
-  **结果（四宽实测）**：**可见环带 0 裁切**（环带外溢四向全为负）；元素框仍有左 6px / 上 8.6px 落在渐隐区（遮罩 65–80% 之外、alpha 已衰减 + blur 7px），3× 放大图无可见硬边；**页面级无横向溢出**（doc/main 逐宽相等）；320 宽下光环给「本就在滚动的条带」多 6px 可滚距离（条带本就因 2×140 列宽可滚），375/768/1440 差值为 0。
-- **T3 八项验证（Playwright，真实生产 API + vite dev；脚本 `/tmp/bili-verify/bili-verify-celebrate.mjs`，未进仓库）—— 46/46 通过（末轮）**：
-  1. 首次加载出现 `.is-celebrating` → 约 3s 后移除、`.is-complete` 常驻；三组动画在跑（halo-burst / sheen）；庆祝态数字 20px ✓
-  2. 静态态 `.cup-arc` opacity = 0 且动画名 `none`（不留常驻亮弧）；数字 `background-clip: text` + 透明字色生效 ✓
-  3. 刷新后不再庆祝、只静态终态 ✓
-  4. 悬停重放：1440 桌面 `(hover:hover)` 成立 → 悬停后动画名 `celebrate-halo-once`/`celebrate-sheen-once`、亮弧 opacity > 0；移开鼠标恢复 `none`；触屏上下文 `(hover:hover)` 不成立、点按无重放 ✓
-  5. `reducedMotion:'reduce'`：从不出现 `.is-celebrating`，静态终态仍在（光环 0.32 / 亮弧 0）✓
-  6. 手动标记：62% 假视频 → 「标记为已看完」→ 弹一次 confirm → 弹窗关闭 → 约 800ms 后出现 `.is-celebrating` ✓
-  7. 存储不可用（对 `celebrated_100_ids` 的 `setItem` 抛错）：不庆祝、无页面错误、只静态终态，**再次刷新仍不庆祝** ✓
-  8. 几何与截图（见上）✓ —— **截图路径**：`/tmp/bili-verify-shots/09-celebrating-{320,375,768,1440}.png`、`/tmp/bili-verify-shots/09-static-{320,375,768,1440}.png`，另 3× 放大图 `zoom-celebrating-375.png`、`zoom-static-375.png`
-  9. **构建**：`npm run build` **绿**，但按 T4 **构建到 `/tmp/bili-dist-check`**（`npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir`），**`client/dist` 未被触碰**（仍是 08:41 那版）→ **生产当前只有删除功能、没有本轮改动**。**构建时机：等你复审通过后执行 `cd client && npm run build`**（静态文件按请求读盘，无需 pm2 restart）。
-  - 测试数据只用假 bvid `BV_TEST_CEL_0921A/B`，**未对真实记录做写操作**；测完清理，库行数回到测试前（首页 8 → 8），`BV_TEST_CEL_*` 残留 0。
-
-**任务进度：**
-- [x] T1 归档天数 3→7
-- [x] T2 庆祝动效
-- [x] T3 端到端验证与截图
-- [x] T4 构建时机（vite dev 验证完成；构建按约定未执行，等复审）
-
-**关键决策点：**
-- 架构/接口变动：`Cylinder3D` 新增 prop `videoId`（`HomePage` 两处传 `video.id`）；新增 `client/src/utils/celebrated.js`（localStorage key `celebrated_100_ids`：`hasCelebrated`/`markCelebrated`/`pruneCelebrated`）；`main.css` 新增 `--celebrate-*`（3 基色 + sheen/halo/arc 三个复合渐变 + outline/glow/glow-strong/glow-none 四个 drop-shadow 复合值，均为「一个 token 一个完整值」，沿用 `--bg-blob-*`/`--liquid-*` 惯例），`tailwind.config.js` 同步 `celebrate` 三色；`.home-grid-scroll` 的 padding+负 margin。后端仅 Part A 的常量。
-- 安全相关：**用户输入** —— 无新增输入面（无表单、无 URL 参数、无新端点）。**认证/密钥/SQL/文件路径**：无。**外部请求**：无。唯一新增存储面 = `localStorage.celebrated_100_ids`，全部读写包 `try/catch`，不动登录 token 等其他 key；存储不可用时按「已庆祝」处理，不抛错。
-- 偏离原计划：① 数字底色按计划提亮（参考稿两个停点未采用）；② 光环缩至 92% + 遮罩百分比反算（采纳计划的「缩小光环」，比例与遮罩数值由我定）；③ 容器用「padding + 等量负 margin」而非单纯加 padding（避免卡片位移）；④ `markCelebrated` 返回布尔、据此决定是否播放（计划只写「存储不可用 → 不播」，实现上必须由写失败反推，否则每次刷新都会播）。
-- 未解决的疑虑：
-  1. **库行数 11 → 10（对账发现，非本轮引入）**：上午删除功能轮结束时（08:47 只读核对）为 11 行；本轮庆祝测试开始时已是 10 行，缺 `id=9`（现总 10 行 = 首页 8 + 已归档 2）。缺行时间落在我 08:42 部署删除功能之后、**我的测试脚本之外**（脚本只按 `BV_TEST_*` 前缀与测试行 id 删除，代码可查；本轮「真实记录未被改动」检查全过）。**判断（非事实）**：用户用新上线的删除功能删掉了那个「意外加入的视频」，与原始诉求吻合 —— **请全局者向用户确认**；若不是用户所为需进一步排查（服务端无请求日志，PM2 日志只有 cron/错误）。
-  2. 数字对上端液体色最差 2.04 <3:1（几何上数字不在杯口）—— 见上对比度表，是否要求三端达标请裁定。
-  3. 320 宽下光环给横向滚动条带多 6px 可滚距离；未再优化（更紧的遮罩会削弱光环柔和感）。
-  4. 亮弧依赖 `@property --ang`：本机 Chromium 支持；旧浏览器（Safari <16.4 / Firefox <128）只「闪一下不旋转」，静态态 opacity 恒 0、不留常驻弧（已断言），属计划认可的可接受降级。
-  5. 本轮对比度脚本在 `/tmp/bili-verify/celebrate-contrast.mjs`（未进仓库）；未改动 `plans/ui-refresh/check-contrast.mjs`。
-
-**顺带变动：** 按工作者写入流程第一步，已在「当前状态」勾选 T1–T4 并加一行完成状态；未改动全局者正文。
 
 ## [2026-09-21 11:02] 全局者 — 审查通过：庆祝动效 + 归档 7 天放行（commit `c78c2a6` + `a3a462e`）
 
