@@ -126,6 +126,11 @@
           @click="markCompleted"
           class="modal-sheet__btn-done"
         >标记为已看完</button>
+        <button
+          @click="deleteVideo"
+          :disabled="deleting"
+          class="modal-sheet__btn-delete"
+        >删除</button>
       </div>
     </div>
     </Transition>
@@ -137,6 +142,7 @@ import { ref, computed, onMounted, onUnmounted, inject } from 'vue'
 import Cylinder3D from '../components/Cylinder3D.vue'
 import AddVideoModal from '../components/AddVideoModal.vue'
 import { api } from '../services/api.js'
+import { confirmVideoDelete } from '../utils/videoDelete.js'
 
 // Device type detection via screen width breakpoints
 const MOBILE_BREAKPOINT = 768
@@ -169,6 +175,7 @@ const showAdd = ref(false)
 const syncProblem = inject('syncProblem', ref(false))
 const editingVideo = ref(null)
 const editName = ref('')
+const deleting = ref(false)
 
 const isMobile = computed(() => deviceType.value === 'mobile')
 
@@ -260,6 +267,29 @@ async function markCompleted() {
     editingVideo.value = null
   } catch (e) {
     window.alert(e.message || '操作失败，请重试')
+  }
+}
+
+async function deleteVideo() {
+  if (!editingVideo.value || deleting.value) return
+  const video = editingVideo.value
+  if (!confirmVideoDelete(video)) return
+
+  deleting.value = true
+  try {
+    await api.deleteVideo(video.id)
+    videos.value = videos.value.filter(item => item.id !== video.id)
+    editingVideo.value = null
+  } catch (e) {
+    if (e.status === 404) {
+      // 其它设备已删——按「已不存在」处理
+      videos.value = videos.value.filter(item => item.id !== video.id)
+      editingVideo.value = null
+    } else {
+      window.alert(e.message || '删除失败，请重试')
+    }
+  } finally {
+    deleting.value = false
   }
 }
 </script>
@@ -644,5 +674,41 @@ async function markCompleted() {
 .modal-sheet__btn-done:focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
+}
+
+/* ---- Destructive: 删除（实心红，白字 4.83:1；破坏性操作与上方按钮拉开间距） ---- */
+.modal-sheet__btn-delete {
+  width: 100%;
+  margin-top: 1rem;
+  padding: 0.5rem 0;
+  background: var(--color-danger-solid);
+  border: none;
+  border-radius: var(--glass-radius-control);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.modal-sheet__btn-delete:hover:not(:disabled) {
+  background: var(--color-danger-solid-hover);
+}
+
+.modal-sheet__btn-delete:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.modal-sheet__btn-delete:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.modal-sheet__btn-delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

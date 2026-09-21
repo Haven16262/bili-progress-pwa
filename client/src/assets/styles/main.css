@@ -67,7 +67,9 @@
   /* ---- Color: Feedback ---- */
   --color-success: #4ade80;                   /* green-400 */
   --color-warning: #facc15;                   /* yellow-400 */
-  --color-danger: #f87171;                    /* red-400 */
+  --color-danger: #f87171;                    /* red-400 — 文字/描边用；白字压其上仅 3.76:1，不可当实心按钮底 */
+  --color-danger-solid: #dc2626;              /* red-600 — 破坏性实心按钮底，白字 4.83:1 过 AA */
+  --color-danger-solid-hover: #b91c1c;        /* red-700 — hover，白字 6.47:1 */
 
   /* ---- Color: Liquid fill — 4-level gradient stops ---- */
   /* Level thresholds: <30 / 30-59 / 60-89 / 90+ (see Cylinder3D.vue) — 分级不改，只调亮半透明 */

@@ -405,6 +405,23 @@ describe('archive counting (H1 bug)', () => {
     expect(log.message).toContain('跳过 1 个')
   })
 
+  test('已被删除的 bvid 出现在 B站 历史窗口中 — runSync 后库里仍无该行（不复活）', async () => {
+    // 用户已把这条视频从库里删掉（无本地行），但 B站 历史窗口里它还在。
+    fetchAllHistory.mockResolvedValue([
+      { bvid: 'BVgone', cid: 1, title: 'Deleted Video', progress: 120, duration: 300 }
+    ])
+
+    const r = await runSync()
+
+    expect(r.ok).toBe(true)
+    expect(r.updated).toBe(0)
+    expect(fetchVideoPages).not.toHaveBeenCalled()
+    expect(testDb.prepare('SELECT * FROM videos WHERE bvid = ?').get('BVgone')).toBeUndefined()
+
+    const log = testDb.prepare('SELECT message FROM sync_log ORDER BY id DESC LIMIT 1').get()
+    expect(log.message).toBe('同步完成：更新 0 个视频')
+  })
+
   test('无失败时消息与旧格式逐字一致（无跳过后缀）且 skipped=0', async () => {
     insertVideo('BVclean', { progress: 50, duration: 300 })
 

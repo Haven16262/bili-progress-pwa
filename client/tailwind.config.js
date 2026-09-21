@@ -35,7 +35,9 @@ export default {
         feedback: {
           success: '#4ade80',            // green-400
           warning: '#facc15',            // yellow-400
-          danger: '#f87171',             // red-400
+          danger: '#f87171',             // red-400 (text/border; not safe as solid bg — white on it is 3.76:1)
+          'danger-solid': '#dc2626',     // red-600 — solid destructive bg, white text 4.83:1
+          'danger-solid-hover': '#b91c1c', // red-700 — hover, white text 6.47:1
         },
       },
       borderRadius: {

@@ -96,6 +96,11 @@
               <span class="settings-details__name">{{ v.custom_name || v.title }}</span>
               <span v-if="v.archived" class="badge badge--muted">已归档</span>
               <span v-else class="badge badge--success">已看完</span>
+              <button
+                @click="deleteCompleted(v)"
+                :disabled="deletingIds.has(v.id)"
+                class="settings-details__delete"
+              >删除</button>
             </div>
           </div>
         </details>
@@ -114,6 +119,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { api } from '../services/api.js'
+import { confirmVideoDelete } from '../utils/videoDelete.js'
 
 const MOBILE_BREAKPOINT = 768
 const TABLET_BREAKPOINT = 1024
@@ -141,6 +147,7 @@ const syncing = ref(false)
 
 const syncStatus = ref({ status: 'never', message: '', at: null })
 const completedVideos = ref([])
+const deletingIds = ref(new Set())
 
 onMounted(() => {
   loadSettings()
@@ -222,6 +229,26 @@ async function loadCompletedVideos() {
     const data = await api.getCompletedVideos()
     completedVideos.value = Array.isArray(data) ? data : []
   } catch { /* ignore */ }
+}
+
+async function deleteCompleted(video) {
+  if (deletingIds.value.has(video.id)) return
+  if (!confirmVideoDelete(video)) return
+
+  deletingIds.value.add(video.id)
+  try {
+    await api.deleteVideo(video.id)
+    completedVideos.value = completedVideos.value.filter(item => item.id !== video.id)
+  } catch (e) {
+    if (e.status === 404) {
+      // 其它设备已删——按「已不存在」处理
+      completedVideos.value = completedVideos.value.filter(item => item.id !== video.id)
+    } else {
+      window.alert(e.message || '删除失败，请重试')
+    }
+  } finally {
+    deletingIds.value.delete(video.id)
+  }
 }
 
 function formatTime(iso) {
@@ -529,5 +556,36 @@ function formatTime(iso) {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  flex: 1;
+}
+
+/* 紧凑版破坏性按钮（白字压 red-600 = 4.83:1 过 AA），与相邻 badge 同高 */
+.settings-details__delete {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  background: var(--color-danger-solid);
+  border: none;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.4;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    opacity var(--duration-fast) var(--ease-out);
+}
+
+.settings-details__delete:hover:not(:disabled) {
+  background: var(--color-danger-solid-hover);
+}
+
+.settings-details__delete:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.settings-details__delete:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>
