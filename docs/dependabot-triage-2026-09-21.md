@@ -53,3 +53,11 @@
 - **服务端依赖变了必须重启服务才生效**，重启由用户 `! pm2 restart bili`（守卫会拦 PM2）。`server/scripts/start.sh` 会在 ABI 不匹配时自愈重编译。
 - **client 依赖变化不需要重启**，且这些包不进浏览器产物，所以**不必为此重新构建 `client/dist`**（构建即上线，没有安全收益，只有风险）。只需证明「换了依赖后仍能构建」——构建到临时目录即可。
 - **验证告警是否真关闭**：push 后再拉一次 `gh api .../dependabot/alerts?state=open`；GitHub 重新扫描可能有几分钟延迟。本地代理指标是两份锁文件各自 `npm audit` 输出 0 个漏洞。
+
+## 执行结果与补充（2026-09-21，工作者实测 + 全局者复核）
+
+- **实际落点**：`server` 17 个包版本变化 / 新增 0 / 移除 1（嵌套旧 `qs`）；`client` 28 个变化 / 新增 0 / 移除 0。`package.json` 一个字节没改，只提交两份锁文件（`05729f6`、`9083ae6`）。`npm update` 取的是**范围内最新**，所以 `ip-address` 落到 10.7.2、server 的 `postcss` 落到 8.5.28，比上表的「最小修复版」更新，均在原范围内。
+- **npm 10.9.8 上 server 的崩溃比上文记的更宽**：不只 `npm audit fix`，`npm update` 一次带上 `vitest` 的多个包也会在 arborist 的 `loadPeerSet` 崩（`edgesOut` of null），崩点由 `vitest@4.1.11` 的 peer 图触发。**可行绕法**：① `express` / `ip-address` / `body-parser` / `postcss` 各自 `npm update <单个包>`；② `vitest` 一步加 **`--legacy-peer-deps`**（只改 peer 解析）。
+- **验证方法（下次可复用）**：解析锁文件前后 JSON 比对（变化/新增/移除、`resolved` 域名、`hasInstallScript` 新增、完整性哈希）；`npm audit` 两目录 0；`npm audit signatures`；用新依赖在**临时端口 + 内存库 + 假密钥**起应用做启动冒烟（注意 curl 带 `[]` 的 URL 要加 `-g`；停临时进程按 PID，**别用 `pkill -f`**）。
+- **待 push 后确认**：GitHub 告警是否归零（以 API 读数为准）。
+

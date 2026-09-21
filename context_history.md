@@ -1307,3 +1307,29 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
 **发布决定：放行** `3786e9b`。授权工作者执行 T9（构建上线）。push 仍由用户 `! git push origin master`。
 
 **移交：** 工作者 T9 → 用户看效果、删预览视频 → 用户 push。plan 009 的修订说明已补「时长 3.6s」。
+
+## [2026-09-21 11:35] 工作者 — T9 构建上线完成（3.6s 版）+ 预览行 v3
+
+**完成情况：** `cd client && npm run build`（不带 `--outDir`）**绿** → `dist/assets/index-Czx-wwLI.css`（45.87 kB）+ `index-B1iCjU_8.js`（120.97 kB）；curl 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` **逐字一致**、两资源均 HTTP 200；线上 CSS 搜到 `--duration-celebrate: 3.6s`（压缩后冒号后留了一个空格，值与 T9 要求一致），且六处 `animation`（3 组庆祝 burst + 3 组悬停重放 once）都写成 `var(--duration-celebrate)` → **慢 1.2× 版已上线**。**未 push**。
+**预览行（构建之后创建，按 T9 规则）**：**`BV_TEST_CEL_PREVIEW3`**，标题「庆祝动效预览 v3（慢 1.2×）· 看完可用红按钮删除」，`progress 100`。假 bvid，永不出现在 B站 历史里，同步不会碰它；用户看完可用首页红色「删除」清掉。（注：上一轮的 `BV_TEST_CEL_PREVIEW2` 已随 11:33 那轮验证清理删除，全局者审查条已接受。）
+**任务进度：** - [x] T9 构建上线
+**关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：无（1.2× 是否合适由用户肉眼定；若要再调，改 `--duration-celebrate` + `CELEBRATION_MS` 两处即可，token 注释已写明联动）。
+
+**顺带变动：** 已按工作者写入流程第一步勾选 T9 并加完成状态行（「当前状态」里的预览行段落此前已被全局者重写，故预览 bvid 记在本条与状态行里）；未改动全局者正文。
+
+# 插入任务：Dependabot 依赖安全清理（2026-09-21）
+
+## [2026-09-21 11:42] 全局者 — 决策：Dependabot 依赖安全清理（28 告警 / 14 包，全在现有范围内）
+
+**背景：** 用户 2026-09-21 要求处理 Dependabot。backlog 早就写明「下次开 Phase 前拉全量重新分诊，勿沿用旧判断」，所以本轮先 `gh api` 拉全量、再读 advisory、再在本机验证可行路径，最后才定方向。
+
+**分诊结果（细节与依据见 `docs/dependabot-triage-2026-09-21.md`）：**
+- 28 个 open / 14 个包 / 两份锁文件；全部有修复版本；全部在现有 semver 范围内，**无大版本升级**。
+- **已核实**：client 漏洞包不进浏览器产物（搜索命中 0）；服务端代码不触达 `qs.stringify`/`comma`、`body-parser` limit 合法、无用户可控外发 URL → 告警在本应用**不可达**（**判断**：实际被利用可能性低，但值得清——告警持续上涨会淹没将来真正相关的）。
+- **本机发现的两个坑（避免工作者踩）：** ① `server` 上 `npm audit fix --dry-run` 直接崩（npm 内部错误），要按名字 `npm update`；② `qs` 被 `express@4.22.1` 写死 `~6.14.0`，只有 `express@4.22.3` 才放宽到 `~6.16.0`，所以必须经 `express` 升，不能 `overrides`。
+
+**决策：** 只提交锁文件、不改 `package.json` 范围；先临时目录验证再动真实目录；不重启服务、不 push、不重建生产 dist（client 漏洞包不进产物，重建无安全收益只有风险）；复审时我会跑锁文件 diff 检查，并按规则 invoke `critic` 看供应链变动（新增包 / install script / 非官方 registry）。
+
+**升级判定（判断，非事实）：** 依赖版本更新不在 `WORKFLOW.md` 强制升级清单内；改动局限于锁文件、可被测试与 `npm audit` 客观验证 → 交工作者。若出现须改 `package.json` 范围、须动 `better-sqlite3`、或锁文件 diff 自查任一断言不成立 → 停下回全局者。
+
+**移交工作者：** T1 → T2 → T3 → T4 → T5。完成后：我复审 → 用户 `! pm2 restart bili`（服务端依赖生效）+ `! git push origin master` → 我再拉一次 GitHub 告警确认归零。

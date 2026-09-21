@@ -9,8 +9,9 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。前序全部任务（412 冻结、删除功能、庆祝动效 + 归档 7 天、16px、放慢 1.2×）均已闭环并已 push（`origin/master` = `87d082c`，其后仅本地 docs 提交）；用户已删除预览视频，生产库回到 10 行真实数据。**本轮新插入任务「Dependabot 依赖安全清理」**（用户 2026-09-21 提出，本轮全局者已按 backlog 要求**拉全量重新分诊**）。
-**当前任务:** 把 GitHub 上 **28 个 open 的 Dependabot 告警（14 个包）清到 0**：修法全在现有版本范围内（**无大版本升级、不加 `--force`、不加新依赖**）。**先在临时目录验证，再动真实目录**；**不重启服务、不 push、不重建 `client/dist`**（服务端依赖变了需用户 `! pm2 restart bili`；push 由用户）。
+**阶段:** 无进行中 Phase。**「Dependabot 依赖安全清理」已实现并审查通过放行**（服务端锁文件 `05729f6`、客户端锁文件 `9083ae6`，本地未 push；审查记录见「本 Phase 历史」[2026-09-21 11:56] 条）。本地 `npm audit` 两份锁文件均 **0 漏洞**；GitHub 上告警是否归零要 **push 后**重扫才知道。
+**当前任务:** 无工作者待办。等用户按顺序做两件事：① **`! pm2 restart bili`**（服务端依赖已换新，重启后才在运行进程里生效；`start.sh` 会自愈 ABI）；重启后全局者会 `curl /api/ping` 核对；② **`! git push origin master`**；push 后全局者再拉一次 `gh api .../dependabot/alerts?state=open` 确认归零（GitHub 重扫可能延迟几分钟）。
+**工作者完成状态（2026-09-21 11:57）：** 依赖清理 T1–T5 全部完成 —— 两份锁文件本地 `npm audit` 均为 **0 漏洞**；server `05729f6` + client `9083ae6`（`package.json` 逐字节未改，**未 push**，**未重启服务**，**未重建 client/dist**）。**服务端依赖需用户 `! pm2 restart bili` 才在运行进程生效**；告警真正关闭 = push 后 GitHub 重扫。交接见「本 Phase 历史」[11:57] 条。
 **关键依据文档（先读，含 14 包×告警号表、可达性核实、已知雷区）:** `docs/dependabot-triage-2026-09-21.md`。
 
 **全局者分诊结论（要点，细节与依据见上文档）:**
@@ -18,11 +19,11 @@
 - **已核实（读了本项目代码）**：服务端代码不调 `qs.stringify`、不开 `comma`、`express.json` 的 limit 合法（`1mb`）、只向写死的 `api.bilibili.com` 发请求 → 这些告警在本应用**不可达**。**判断**：实际被利用的可能性低，但值得清（告警一直在涨会淹没将来真正相关的）。
 
 **任务清单(给工作者):**
-- [ ] **T1 服务端：临时目录验证**。在 `/tmp/bili-dep-scratch/server/` 建一份**只含** `package.json`、`package-lock.json`、`src/`、`tests/`、`vitest.config.js`（及 `scripts/` 若测试需要）的拷贝——**不要复制 `data.db`、`.env`、`node_modules`**（含生产数据与密钥）。在其中：`npm ci`（先证明干净安装在本机能走通，含 `better-sqlite3` 的 prebuild 下载/编译）→ `npm update express ip-address vitest`（`postcss` 若仍旧再显式 `npm update postcss`）→ 干净 shell（`env -i`）跑测试 → `npm audit`（完成标准：**0 个漏洞**，或逐条列出残余并说明原因）→ `npm ls` 无 ERR/missing/invalid。**`package.json` 里的版本范围一个都不许改**（都在现有范围内）；若某个包必须改范围才能修 → 停下，回全局者。**`better-sqlite3` 版本不许变**（现为 11.10.0）。
-- [ ] **T2 服务端：应用到真实目录**。把 T1 验证过的 `package-lock.json` 拷回 `server/`，在真实目录 `npm ci`，然后：`node -e` 打开 `:memory:` 库确认 `better-sqlite3` 能加载；干净 shell 跑 `server` 全部测试；`npm audit` 0。**不要 `pm2 restart`**（守卫会拦；重启由用户 `!`）。（完成标准：上述全过；交接里写明「服务端依赖已更新，需用户 `! pm2 restart bili` 才生效」）
-- [ ] **T3 客户端**。`cd client && npm audit fix`（**不加 `--force`**）→ `npm audit` 0 → `npm ls` 无 ERR → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir`（**构建到临时目录，不动 `client/dist`**：这些包不进浏览器产物，重建生产 dist 没有安全收益）。（完成标准：构建绿；比较临时产物与现 `client/dist` 的 JS/CSS 体积，差异大于 ±5% 则在交接里说明）
-- [ ] **T4 交接前自查（锁文件 diff）**。对两份 `package-lock.json` 的 diff 各出一份清单：**版本变化的包（名 旧→新）**、**新增的包**、**移除的包**；并断言：① 新增/变更的 `resolved` 全部是 `registry.npmjs.org`；② 没有新增 `hasInstallScript: true` 的包；③ 只出现分诊文档里 14 个包及它们的传递依赖的变动。任一不成立 → 停下问全局者，别自行判断为无害。（完成标准：清单 + 三条断言结果写进交接）
-- [ ] **T5 提交**。服务端与客户端**分两个提交**，`git add <明确路径>` + `git commit -- <同路径>`（只有锁文件；`package.json` 若一个字节都没变就不要加）。**不 push。**
+- [x] **T1 服务端：临时目录验证**。在 `/tmp/bili-dep-scratch/server/` 建一份**只含** `package.json`、`package-lock.json`、`src/`、`tests/`、`vitest.config.js`（及 `scripts/` 若测试需要）的拷贝——**不要复制 `data.db`、`.env`、`node_modules`**（含生产数据与密钥）。在其中：`npm ci`（先证明干净安装在本机能走通，含 `better-sqlite3` 的 prebuild 下载/编译）→ `npm update express ip-address vitest`（`postcss` 若仍旧再显式 `npm update postcss`）→ 干净 shell（`env -i`）跑测试 → `npm audit`（完成标准：**0 个漏洞**，或逐条列出残余并说明原因）→ `npm ls` 无 ERR/missing/invalid。**`package.json` 里的版本范围一个都不许改**（都在现有范围内）；若某个包必须改范围才能修 → 停下，回全局者。**`better-sqlite3` 版本不许变**（现为 11.10.0）。
+- [x] **T2 服务端：应用到真实目录**。把 T1 验证过的 `package-lock.json` 拷回 `server/`，在真实目录 `npm ci`，然后：`node -e` 打开 `:memory:` 库确认 `better-sqlite3` 能加载；干净 shell 跑 `server` 全部测试；`npm audit` 0。**不要 `pm2 restart`**（守卫会拦；重启由用户 `!`）。（完成标准：上述全过；交接里写明「服务端依赖已更新，需用户 `! pm2 restart bili` 才生效」）
+- [x] **T3 客户端**。`cd client && npm audit fix`（**不加 `--force`**）→ `npm audit` 0 → `npm ls` 无 ERR → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir`（**构建到临时目录，不动 `client/dist`**：这些包不进浏览器产物，重建生产 dist 没有安全收益）。（完成标准：构建绿；比较临时产物与现 `client/dist` 的 JS/CSS 体积，差异大于 ±5% 则在交接里说明）
+- [x] **T4 交接前自查（锁文件 diff）**。对两份 `package-lock.json` 的 diff 各出一份清单：**版本变化的包（名 旧→新）**、**新增的包**、**移除的包**；并断言：① 新增/变更的 `resolved` 全部是 `registry.npmjs.org`；② 没有新增 `hasInstallScript: true` 的包；③ 只出现分诊文档里 14 个包及它们的传递依赖的变动。任一不成立 → 停下问全局者，别自行判断为无害。（完成标准：清单 + 三条断言结果写进交接）
+- [x] **T5 提交**。服务端与客户端**分两个提交**，`git add <明确路径>` + `git commit -- <同路径>`（只有锁文件；`package.json` 若一个字节都没变就不要加）。**不 push。**
 
 **未验证的前提:**（2026-09-21）
 - **判断**：`npm update express` 一步会把 `qs` 带到 6.16.x、`body-parser` 到 1.20.8——依据是 registry 上 `express@4.22.3` 的依赖声明（全局者用 `npm view` 读到 `qs ~6.16.0`），**本机未实际装过验证**，T1 落实。
@@ -31,6 +32,7 @@
 - **本轮不做**：不改 `package.json` 版本范围、不引入 Dependabot 自动更新配置（见 backlog）、不重建生产 dist。
 
 **backlog（下次开 Phase 顺手项，非紧急）:**
+- 【2026-09-21 新增·既有行为】`server/src/index.js` 第 98–101 行的**全局错误处理器把所有错误一律返回 500**：body-parser 抛的 413（请求体过大）、畸形 JSON 的 400 等本应是 4xx 的错误，客户端看到的都是 500 且日志里报 `[error]`。**不是本轮引入**（本轮 `src` 零改动，全局者用新依赖起临时实例实测：超 1MB 请求体确实被拒，但返回 500）。低优先，安全上无影响（限制仍然有效、不泄露栈信息）；若要修：处理器里尊重 `err.status`/`err.statusCode`（4xx 原样返回，仅 5xx 统一成「服务器内部错误」）
 - 【2026-09-21 新增】**首页杯内数字的对比度整体低于 WCAG AA 4.5:1**：杯中部液体色 `rgb(172 97 245)` 上，现有 12px 白字 3.63、庆祝态 16px 淡紫 3.06–3.31；上端液体色更低（白字 2.42）。**既有状态，非本轮引入**；靠描边/黑影提升可辨识度，但数值上没到 AA。若要系统性修：加深液体色下界，或给数字加半透明深色衬底——属视觉语言层面的取舍，需用户拍板，不在小任务里顺手改
 - 【2026-09-21 新增】部署后旧资源路径（如 `/assets/index-<旧哈希>.js`）返回 SPA 兜底 HTML（200 + `text/html`）而非 404 —— 工作者观察，**既有行为、非本轮引入**（2026-09-03 轮同一机制）；PWA `autoUpdate` 下次加载即更新，低优先，仅当出现「部署后白屏」的反馈再排查
 - 【2026-09-11 新增】`bilibili.test.js` 补断言：降级路径第二请求的凭据头（Cookie/UA/Referer）透传一致性 —— critic LOW（回归检测缺口，非现存漏洞）
@@ -38,7 +40,7 @@
 - 真机性能确认：液体玻璃 `backdrop-filter`（headless 4× throttle 已测；详情见上一 Phase 关闭条目）
 - `@supports` 玻璃回退块 DRY（约 12 份散在组件 scoped 样式）
 - `styleSrc 'unsafe-inline'` 移除需 nonce/hash 方案
-- Dependabot 告警 28 个 → **本轮正在处理**（见「当前状态」与 `docs/dependabot-triage-2026-09-21.md`）。清完之后的建议（未决，用户定）：告警历史是 7/12 仅 2 → 9/3 是 20 → 9/11 是 28，**会再涨**；可考虑把「`npm audit` 两份锁文件」放进例行体检（如 `/pitstop`），或开 Dependabot security updates 自动提 PR——后者会让 PR 里混入依赖变化，需要一个审查流程，先不做
+- Dependabot 告警 28 个 → **本轮正在处理**（见「当前状态」与 `docs/dependabot-triage-2026-09-21.md`）。清完之后的建议（未决，用户定）：告警历史是 7/12 仅 2 → 9/3 是 20 → 9/11 是 28，**会再涨**；可考虑把「`npm audit` 两份锁文件」放进例行体检（如 `/pitstop`），或开 Dependabot security updates 自动提 PR——后者会让 PR 里混入依赖变化，需要一个审查流程，先不做。另：本轮审查暴露出**「依赖冷却期」策略未定**——npm 默认取范围内最新，本次有 9 个版本发布不足一周（最新 2.1 天）；是否要求「新版本至少发布 N 天才采用」或「只取最小修复版」是流程决策，需用户定（代价：修复延迟）
 - 【2026-09-21 新增】**接入 YouTube（方向，用户决定先不做）**：官方 API 无观看历史/进度，不能照搬 B站 的 SESSDATA 模式；建议先「手动进度 + API 取元数据」再视需要加浏览器端上报。含数据库迁移（`bvid` 唯一键改「平台+ID」，强制升级项，全局者实现）。完整调研与开工前要问用户的两件事见 `docs/idea-youtube-integration-2026-09-21.md`
 - M4 完整版（独立 `SESSDATA_ENC_KEY` + 迁移，全局者实现域）
 - 若 wbi 端点日后强制 wbi 签名（w_rid/wts）：改 pagelist 为主端点，或实现 wbi 签名 —— 本次刻意不做（无签名 wbi/view 现测 200，先最小改动）
@@ -73,26 +75,48 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-21 11:35] 工作者 — T9 构建上线完成（3.6s 版）+ 预览行 v3
+## [2026-09-21 11:47] 工作者 — Dependabot 依赖清理完成（两锁文件 audit 0，未重启/未 push）
 
-**完成情况：** `cd client && npm run build`（不带 `--outDir`）**绿** → `dist/assets/index-Czx-wwLI.css`（45.87 kB）+ `index-B1iCjU_8.js`（120.97 kB）；curl 生产 `127.0.0.1:3000` 的 index.html 引用哈希与 `client/dist/assets` **逐字一致**、两资源均 HTTP 200；线上 CSS 搜到 `--duration-celebrate: 3.6s`（压缩后冒号后留了一个空格，值与 T9 要求一致），且六处 `animation`（3 组庆祝 burst + 3 组悬停重放 once）都写成 `var(--duration-celebrate)` → **慢 1.2× 版已上线**。**未 push**。
-**预览行（构建之后创建，按 T9 规则）**：**`BV_TEST_CEL_PREVIEW3`**，标题「庆祝动效预览 v3（慢 1.2×）· 看完可用红按钮删除」，`progress 100`。假 bvid，永不出现在 B站 历史里，同步不会碰它；用户看完可用首页红色「删除」清掉。（注：上一轮的 `BV_TEST_CEL_PREVIEW2` 已随 11:33 那轮验证清理删除，全局者审查条已接受。）
-**任务进度：** - [x] T9 构建上线
-**关键决策点：** 架构/接口变动：无（仅重新构建静态资源）；安全相关：无（无新增输入面/请求/凭据面）；偏离原计划：无；未解决的疑虑：无（1.2× 是否合适由用户肉眼定；若要再调，改 `--duration-celebrate` + `CELEBRATION_MS` 两处即可，token 注释已写明联动）。
+**完成情况：**
+- **T1（临时目录验证，`/tmp/bili-dep-scratch/server/`）**：只含 package.json / package-lock.json / src / tests / vitest.config.js（**无 data.db、.env、node_modules**）。`npm ci` 走通（含 better-sqlite3 prebuild 下载）→ 更新 → `env -i` 全量 **46 例全绿** → `npm audit` **0** → `npm ls` 无 ERR/missing/invalid ✓
+- **T2（真实目录）**：把验证过的锁文件拷回 `server/` → `npm ci`（169 包，audit 0）→ `node -e` 打开 `:memory:` 库确认 **better-sqlite3 11.10.0 加载正常**（建表/插入/查询通过）→ `env -i` **46 例全绿** → audit 0。**未 `pm2 restart`**（生产 `127.0.0.1:3000/api/ping` 全程 200）→ **需用户 `! pm2 restart bili` 才在运行进程生效**。
+- **T3（客户端）**：`npm audit fix`（**不加 `--force`**）→ **0 漏洞**（changed 28 packages）→ `npm ls` 无 ERR/missing/invalid → `npm run build -- --outDir /tmp/bili-dist-check --emptyOutDir` **绿**。产物与现 `client/dist` **同名哈希、同字节数**：JS 120965 B、CSS 45874 B（**+0.00%**）→ 确认这些包不进浏览器产物，**未重建生产 dist**。
+- **T4（锁文件 diff 三断言；脚本 `/tmp/bili-dep-scratch/lockdiff.py`，未进仓库）**：
+  - **server**：版本变化 **17** / 新增 **0** / 移除 **1**。变化 = `express 4.22.1→4.22.3`、`qs 6.14.2→6.16.0`、`body-parser 1.20.5→1.20.8`、`ip-address 10.2.0→10.7.2`、`vitest` 与 `@vitest/{expect,mocker,pretty-format,runner,snapshot,spy,utils} 4.1.9→4.1.11`、`postcss 8.5.16→8.5.28`、`nanoid 3.3.15→3.3.19`、`side-channel 1.1.0→1.1.1`、`tinyrainbow 3.1.0→3.1.1`、`@jridgewell/sourcemap-codec 1.5.5→1.6.0`；移除 = `body-parser/node_modules/qs`（嵌套旧副本，已 dedupe 到顶层 6.16.0）。
+  - **client**：版本变化 **28** / 新增 **0** / 移除 **0**。变化 = `nanoid 3.3.11→3.3.19`、`postcss 8.5.12→8.5.28`、`fast-uri 3.1.2→3.1.8`、`brace-expansion 5.0.6→5.0.12`（另一份嵌套 `2.1.0→2.1.7`）、`browserslist 4.28.2→4.29.0`、`baseline-browser-mapping 2.10.24→2.11.25`、`@babel/core 7.29.0→7.29.7` 及 `@babel/*` 家族、`postcss-selector-parser 6.1.2→6.1.4`、`caniuse-lite`、`electron-to-chromium`、`node-releases`、`update-browserslist-db`。
+  - **① resolved 全为 `registry.npmjs.org`：✅** ｜ **② 新增包里 `hasInstallScript`：0 个（两份锁文件都零新增包）：✅** ｜ **③ 涉及包名逐一对照分诊文档 14 包及传递依赖：✅**（server 侧多出的 `express` 即文档指定的承载路径；`nanoid` 是 postcss 的依赖、`side-channel` 是 qs 的依赖、`tinyrainbow`/`@jridgewell/sourcemap-codec`/`@vitest/*` 是 vitest 的依赖，均属传递依赖）。
+- **T5**：提交 `05729f6`（server 锁文件，80+/94−）与 `9083ae6`（client 锁文件，128+/125−）；`git diff --stat -- server/package.json client/package.json` **无输出**（逐字节未改）；**未 push**。
+- **环境备注（分诊文档未记全，实测补充）**：npm **10.9.8** 上 server 侧 `npm audit fix` **与** `npm update <含 vitest 的多个包>` 都会崩在同一处 arborist `loadPeerSet`（`Cannot read properties of null (reading 'edgesOut')`），崩点由 `vitest@4.1.11` 的 peer 图触发。可行绕法：① `npm update <包名>` **逐个**更新（express / ip-address / body-parser / postcss 都不崩）；② vitest 一步加 **`--legacy-peer-deps`**（只改 peer 解析；本锁文件上结果是纯版本提升，见 T4 断言①③）。
+- **回滚材料**：旧锁文件备份 `/tmp/bili-dep-scratch/{server,client}-package-lock.json.orig`（git 历史里同样可取）。
 
-**顺带变动：** 已按工作者写入流程第一步勾选 T9 并加完成状态行（「当前状态」里的预览行段落此前已被全局者重写，故预览 bvid 记在本条与状态行里）；未改动全局者正文。
+**任务进度：** - [x] T1 - [x] T2 - [x] T3 - [x] T4 - [x] T5
 
-## [2026-09-21 11:42] 全局者 — 决策：Dependabot 依赖安全清理（28 告警 / 14 包，全在现有范围内）
+**关键决策点：**
+- 架构/接口变动：无（仅两份锁文件；`package.json` 未动）。
+- 安全相关：**依赖更新本身** —— 28 个告警涉及包全部升到修复版本（或更高，仍在范围内）；零新增依赖、零 install script、resolved 全为官方 registry。可达性判断见分诊文档（这些告警在本应用代码路径不可达）。认证/密钥/用户输入/SQL/文件路径/外部请求：无变化。
+- 偏离原计划：① vitest 一步改用 `--legacy-peer-deps` 绕过 npm 崩溃（分诊只建议「按名字 update」，实测不够）；② `ip-address` 落到 10.7.2（文档预期 10.3.1）、server `postcss` 落到 8.5.28（文档预期 8.5.23）——都在原范围内、都是更新版本，无风险差异。
+- 未解决的疑虑：
+  1. `--legacy-peer-deps` 只影响这一次 resolution；以后常规 `npm install` 会按正常 peer 规则重算依赖树，届时解析结果可能又变（无实际影响，锁文件为准）——仅备注。
+  2. 告警是否真关闭 = **push 后** GitHub 重扫（有几分钟延迟）；本地代理指标（两份 `npm audit` 0）已达标，验收标准以 push 后的 API 读数为准。
+  3. better-sqlite3 未动版本（11.10.0），但 `npm ci` 重装过它：已实测 `:memory:` 加载正常 + 测试全绿；生产进程要重启后才会用新装的副本（启动脚本的 ABI 自愈兜底仍在）。
 
-**背景：** 用户 2026-09-21 要求处理 Dependabot。backlog 早就写明「下次开 Phase 前拉全量重新分诊，勿沿用旧判断」，所以本轮先 `gh api` 拉全量、再读 advisory、再在本机验证可行路径，最后才定方向。
+**顺带变动：** 已按工作者写入流程第一步勾选 T1–T5 并加完成状态行；未改动全局者正文。
 
-**分诊结果（细节与依据见 `docs/dependabot-triage-2026-09-21.md`）：**
-- 28 个 open / 14 个包 / 两份锁文件；全部有修复版本；全部在现有 semver 范围内，**无大版本升级**。
-- **已核实**：client 漏洞包不进浏览器产物（搜索命中 0）；服务端代码不触达 `qs.stringify`/`comma`、`body-parser` limit 合法、无用户可控外发 URL → 告警在本应用**不可达**（**判断**：实际被利用可能性低，但值得清——告警持续上涨会淹没将来真正相关的）。
-- **本机发现的两个坑（避免工作者踩）：** ① `server` 上 `npm audit fix --dry-run` 直接崩（npm 内部错误），要按名字 `npm update`；② `qs` 被 `express@4.22.1` 写死 `~6.14.0`，只有 `express@4.22.3` 才放宽到 `~6.16.0`，所以必须经 `express` 升，不能 `overrides`。
+## [2026-09-21 11:56] 全局者 — 审查通过：Dependabot 依赖清理放行（commit `05729f6` + `9083ae6`）
 
-**决策：** 只提交锁文件、不改 `package.json` 范围；先临时目录验证再动真实目录；不重启服务、不 push、不重建生产 dist（client 漏洞包不进产物，重建无安全收益只有风险）；复审时我会跑锁文件 diff 检查，并按规则 invoke `critic` 看供应链变动（新增包 / install script / 非官方 registry）。
+**背景：** 工作者交接块（[2026-09-21 11:47] 条；原写 11:57 晚于真实时间——两个提交在 11:46——已订正）交付 T1–T5。旧条：[11:35] 工作者（T9）、[11:42] 全局者（本任务决策）已归档 `context_history.md`。
 
-**升级判定（判断，非事实）：** 依赖版本更新不在 `WORKFLOW.md` 强制升级清单内；改动局限于锁文件、可被测试与 `npm audit` 客观验证 → 交工作者。若出现须改 `package.json` 范围、须动 `better-sqlite3`、或锁文件 diff 自查任一断言不成立 → 停下回全局者。
+**审查动作：**
+- 安全预检 `security-scan.sh d6df3c7`：命中（锁文件里的 `https://` 行，噪音）；规则要求「命中即必审」→ 因 `critic` 无 Bash 工具、看不了 git diff 与 `npm view`，改 invoke `security-reviewer`（只读、限定供应链维度、按 critic 报告格式输出），关键结论由全局者独立复算。
+- **全局者独立复核（不依赖工作者报告）：** 解析两份锁文件前后 JSON（`d6df3c7` vs `HEAD`）——server 变化 17 / 新增 0 / 移除 1（嵌套旧 `qs@6.15.1`）、client 变化 28 / 新增 0 / 移除 0，与工作者一致；`resolved` 全为 `registry.npmjs.org`、完整性哈希齐全、**无新增 `hasInstallScript`**、`better-sqlite3` 11.10.0 不变、两份 `package.json` 逐字节未改；两个目录 `npm audit` 均 **0 漏洞**；`server` 干净 shell（`env -i`）**46 例全绿**；`better-sqlite3` 打开 `:memory:` 库正常。**另外做了工作者没做的启动验证：** 用新依赖在临时端口（3999，内存库，假密钥，不碰真实库与运行中的进程）起完整应用——`/api/ping` 200、未鉴权 `/api/videos` 401、限流头在；更新后的 `qs` 处理嵌套/数组/12 层深嵌套/1000 项数组查询串均无崩溃（全 401、日志 0 条 `[error]`）、应用全程存活；测完按 PID 关掉，线上 3000 全程 200。（过程中我的第一次清理命令用 `pkill -f` 把自己的 shell 也杀了，临时服务残留过片刻，已按 PID 关闭并确认端口已释放；随后用 `curl -g` 重做了被 `[]` 通配符弄失效的 `qs` 检查。）
+- **security-reviewer 报告：可放行，无 CRITICAL/HIGH，2 MEDIUM + 4 LOW，均不阻塞。** 它对 45 个变动逐个 `npm view` 新旧版本（维护者/发布者/deprecated/仓库/tarball/完整性），43 个不同版本的锁文件 integrity 与 registry **0 不一致**，`npm audit signatures` 两个目录已装包**全部签名验证通过**（server 169、client 410），对 12 个包做了 tarball 内容 diff 并 grep 危险模式（仅 ip-address 的两处正则 `.exec()`，无害）。
 
-**移交工作者：** T1 → T2 → T3 → T4 → T5。完成后：我复审 → 用户 `! pm2 restart bili`（服务端依赖生效）+ `! git push origin master` → 我再拉一次 GitHub 告警确认归零。
+**裁定（针对交接块与审查报告）：**
+1. **新版本较新（9 个不足一周，最新 2.1 天）**：**接受**。依据：发布者是各项目自己的 GitHub Actions + 带 provenance、维护者列表未变、版本跳跃属常规补丁/小版本、签名与完整性全部验证；这些是数据类包（`electron-to-chromium`/`node-releases` 等）的常规节奏，加上 28 个告警对应的补丁潮。**已知残余风险**（审查者也明说）：没有逐字审读全部 45 个 tarball（12 个做了 diff）、没查维护者账号是否被盗、太新的版本可能尚未被撤回——这是「要不要设依赖冷却期」的**流程决策，不是本次缺陷**，已入 backlog 由用户定。
+2. **MEDIUM-1（`tinyrainbow`、`postcss-selector-parser` 各增加一位维护者）**：**接受，不阻塞**。两者都只在**开发/构建阶段**（vitest 依赖 / tailwind 构建链），**不在生产运行路径**；新版本发布已 54 天 / 3 个月，非新近；审查者对这两位账号的身份判断来自记忆、未验证，我也无法验证——如实记为「未验证」。
+3. **MEDIUM-2（`qs`/`side-channel`/`fast-uri` 等个人发布、无 provenance）**：**接受**。旧版本同样无 provenance，不是退化；`qs` 与 `side-channel` 的发布者 `ljharb` 是长期维护者且维护者列表未变。生产运行路径上真正变动的包只有 `express`/`qs`/`body-parser`/`ip-address`/`side-channel` 五个，其中前三者中 express、body-parser、ip-address 带 provenance。
+4. **LOW-3（`express` 4.22.3 给 `req.query` 加 `arrayLimit: 1000`）**：已由上面的启动验证覆盖（1000 项数组查询不崩）；本应用不使用查询串数组。**LOW-2**（`brace-expansion` 收窄 `engines.node`）：部署机 Node 22.23.2，无影响。**LOW-1**（`ip-address` 新增 `prepare` 脚本）：npm 不会在依赖安装时执行 `prepare`，且无 `hasInstallScript`。
+5. **工作者的偏离 ①②**（vitest 一步用 `--legacy-peer-deps` 绕过 npm 崩溃；`ip-address` 落 10.7.2、server `postcss` 落 8.5.28，均新于分诊文档预期的最小修复版）：**接受**。① 我在分诊文档写「按名字 update」不够，实测补充已写进文档；② 都在原范围内。「`npm update` 取范围内最新」是 npm 默认行为，若要「只取最小修复版」属冷却期/固定策略的流程决策，同上。
+6. **工作者的疑虑 1**（`--legacy-peer-deps` 只影响这一次解析，以后常规 `npm install` 可能重算）：知悉，以锁文件为准，无需处理；**疑虑 3**（`npm ci` 重装过 `better-sqlite3`）：已由我独立复核（加载正常 + 46 例全绿 + 临时实例启动正常）。
+
+**发布决定：放行** `05729f6`、`9083ae6`。**移交用户：** ① `! pm2 restart bili`（服务端依赖生效）；② `! git push origin master`。之后全局者核对线上 `/api/ping` 并拉 GitHub 告警确认归零。**注意：** 生产进程在用户重启前仍跑着旧依赖；`client/dist` 按分诊结论**不重建**（这些包不进浏览器产物）。
