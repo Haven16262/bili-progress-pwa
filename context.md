@@ -9,17 +9,33 @@
 
 <!-- 全局者每次写入决策时覆盖此区块；工作者启动时优先读这里 -->
 
-**阶段:** 无进行中 Phase。插入任务「每日同步 412 冻结」：**已修复 + 审查通过放行**（2026-09-11；实现 commit `155f420`；审查记录见「本 Phase 历史」[2026-09-11 04:46] 条）。**已发布**（2026-09-11）：用户 `! git push origin master` 完成，origin/master = `dd79baa`（含修复 `155f420` + 两条 docs）。上一 Phase「视觉语言翻新 — 液体玻璃」已关闭（2026-09-03，commit `a1a4a93`，已 push origin/master）。
-**当前任务:** 无。唯一待观察项：**9/12 03:07 cron 首次自动同步** —— 下一轮 session 先查 `sync_log`（预期 success；见「未验证的前提」）。
-**根因（已实证）:** B站 `/x/web-interface/view` 对本服务 UA（Chrome/125 型）返回 HTTP 412（WAF）；`runSync` 步骤 5 逐视频取分P信息无容错，单个 412 抛穿整轮 → 9/6–9/11 每日冻结。修复 = 端点降级链（`wbi/view` 主 → `pagelist` 备）+ 逐视频跳过容错。SESSDATA 有效，无需重填。
-**关键依据文档:** 诊断全文与定稿决策已归档 `context_history.md`「插入任务：每日同步 412 冻结（2026-09-11）」段（含证据时间线、复现命令、探针矩阵）；审查记录（含 critic 报告摘要与三项裁定）见「本 Phase 历史」[2026-09-11 04:46] 条。上一 Phase 归档：`context_history.md`「Phase：视觉语言翻新 — 液体玻璃（2026-09-03）」段。视觉稿 Artifact `https://claude.ai/code/artifact/2da1c9e3-223d-4ba4-98df-8edb22efc2ea`（源 `plans/ui-refresh/canvas-src/`）。
+**阶段:** 无进行中 Phase。插入任务「补全删除功能」（2026-09-21）：**已实现 + 审查通过放行**（实现 commit `bac5b29`，本地未 push；审查记录见「本 Phase 历史」[2026-09-21 08:55] 条）。前序「每日同步 412 冻结」已发布（origin/master = `d2c5783`）且 cron 观察项已核销（`sync_log` #154–#163 十次定时同步全 success）。上一 Phase「视觉语言翻新 — 液体玻璃」2026-09-03 关闭。
+**当前任务:** 无。唯一待办 = 用户执行 `! git push origin master`（发布 `bac5b29` 及其后的 docs commit）。**前端已在线**（工作者 T5 的 `npm run build` 即更新生产 `client/dist`，无需 pm2 restart，见 memory `proj-frontend-build-deploy`），线上先于 push 生效属预期，不是待回滚项。
+**关键依据文档:** 无外部 spec。现状代码事实（全局者 2026-09-21 已读，路径均相对项目根）：
+- 后端 `DELETE /api/videos/:id` **已存在**（`server/src/routes/videos.js` 第 74 行起；`requireAuth` + `Number.isInteger(id)&&id>0` 校验 + 404），`db/queries.js` 的 `deleteVideo(id)` 是硬删除；前端 `client/src/services/api.js` 的 `api.deleteVideo(id)` 也已存在 —— 但**全项目零处 UI 调用、零测试**（`grep` 确认），即这条链路从未被真实走过。
+- 首页编辑弹窗在 `client/src/views/HomePage.vue`（`modal-sheet`，按钮排布：一行 `取消/保存`，其下全宽 `标记为已看完`；`markCompleted()` 已用 `window.confirm` + 失败 `window.alert` 的模式）。
+- 已看完列表在 `client/src/views/SettingsPage.vue` 第 85–102 行（`<details>` 内 `.settings-details__row`：名称 ellipsis + badge），数据来自 `api.getCompletedVideos()`（`progress>=100 OR archived=1`）。
+- 同步**不会复活**已删视频：`server/src/services/sync.js` 只 UPDATE 已有行，全库唯一 INSERT 入口是 `POST /api/videos`（读代码 + grep 所得，**未运行验证**，由 T1 的测试落实）。
+- 颜色 token：`main.css` 已有 `--color-danger: #f87171`（red-400），但**白字压在它上面对比度不足 AA**，不能直接当红底按钮色。
 
-**任务清单(给工作者):** 空（三项已全部核销，审查通过）。
+**已定细节（全局者决策，含理由）:**
+1. **硬删除**（复用现有端点，不做软删除/回收站）。理由：用户诉求是「误加的视频要能彻底移除」；软删除要改 schema + 迁移 + 再造一个查看/恢复入口，超出诉求。**丢失的本地独有数据**：`custom_name`、`pinned`、`manually_completed`（B站 侧数据可通过「添加视频」重新拉回，`page_cache` 孤行无害，见「未验证的前提」）。
+2. **确认框沿用 `window.confirm`**（与 `markCompleted` 一致，用户要的是「弹一次确定框」，不引入自绘确认组件）。文案须点明**视频名 + 不可恢复 + 本地命名/置顶/看完标记一并丢失**。每个入口只弹**一次**。
+3. **首页弹窗**：「删除」全宽按钮放在「标记为已看完」**下方**，与其保持明显间距（防误触；删除是破坏性操作，不与「保存」并排）。红底白字，不用 `backdrop-filter`（实心色，所以无需 `@supports` 回退）。
+4. **设置页列表**：每行右侧加紧凑「删除」按钮（同红底样式的小号版），一次确认，成功后从本地 `completedVideos` 移除该行。删除设置页里的一条，首页对应卡片也随之消失（同一张表；已看完但未归档的视频两处都显示）。
+5. **成功/失败处理**：成功 → 本地数组移除 + 关弹窗（首页）；失败 → `window.alert(e.message || '删除失败，请重试')`；请求进行中按钮禁用（防连点）；后端返回 404（别的设备已删）按「已不存在」处理，同样从本地移除并关弹窗，不报错。
+6. **不做**：撤销/回收站、批量删除、长按/滑动删除、服务端字段变更、自绘确认框。（YAGNI；均非用户要求。）
+7. **升级判定（这是判断，非事实）：** 不命中「强制升级」第 4 项（不可逆批量操作）—— 单条、后端端点已存在且带鉴权与参数校验、有用户二次确认；故交工作者实现。若工作者实现中发现需改后端行为（如要清 `page_cache`、要新增端点），按切换触发条件回全局者。
 
-**未验证的前提:**
-- **9/12 03:07 cron 首次自动跑的结果**（手动同步 #153 通过 ≠ cron 闭环；两者共用 runSync，风险低，但需下一轮确认）
-- 412 的确切触发规则 —— 「Chrome 型 UA 触发、仅此端点」已两次独立实证；是否与 IP 信誉累积相关，未验证（不阻塞）
-- pagelist 备端点对超大分P（>100）视频的完整性未逐例验证（已测 16/86/92 三例与主端点逐项一致；若截断，截断外视频走既有单集回退，且仅在 wbi 失败时才会走到）
+**任务清单(给工作者):**
+- [x] **T1 后端测试补齐（不改后端逻辑，除非测试暴露缺陷）**：为 `DELETE /api/videos/:id` 写**真实路由测试**（走 `requireAuth`，JWT 用 `server/vitest.config.js` 里注入的测试用 `JWT_SECRET` 签；**不要**沿用 `backlog.test.js` 里那种「复制条件式自证」的伪测试）。覆盖：删除成功 → 200 且该行消失、`listVideos()` 与 `listCompletedVideos()` 均不再含它；不存在的 id → 404；非法 id（0 / -1 / 1.5 / abc）→ 400；无 token → 401。再在 `sync.test.js` 加一例：已被删除的 bvid 出现在 B站 历史窗口中，`runSync` 之后**库里仍无该行**（不复活）。（完成标准：`server` 下**干净 shell**（`env -i`，见「测试封闭性」约定）全绿；新增用例先确认能因缺陷而失败——至少「不复活」一例手动注入 INSERT 验证它会红，再还原）
+- [x] **T2 首页删除按钮**：`HomePage.vue` 编辑弹窗按「已定细节」3、5 实现。红底色**必须**用 CSS token（在 `main.css` `:root` 新增如 `--color-danger-solid`，并按既有惯例同步 `tailwind.config.js`），白字对比度 ≥ 4.5:1（按「当前视觉语言」约定的声明色静态模型算并写进交接）；保留 `focus-visible` 的 accent outline、hover/active 反馈；reduced-motion 不需另写（既有块已覆盖）。（完成标准：取消确认框 → 视频仍在；确认 → 弹窗关闭且卡片立即消失，刷新后仍不在；请求失败 → 出现 alert 且弹窗保持）
+- [x] **T3 设置页删除**：`SettingsPage.vue` 已看完列表按「已定细节」4、5 实现；小号红底按钮复用 T2 的 token；长名称仍 ellipsis，**320/375 宽不横向溢出**。（完成标准：同 T2 三条行为；320 与 375 宽截图无溢出）
+- [x] **T4 端到端验证（用测试视频，别碰真实记录）**：按「测试纪律」约定，**先 `POST /api/videos` 建 2 条测试视频**（bvid 用明显的假值如 `BV_TEST_DEL_0921A/B`），一条留在首页、一条经「标记为已看完」进入已看完列表；然后走浏览器（Playwright，`window.confirm` 用 dialog 事件分别测「取消」与「确认」）验证 T2/T3 的行为；**不要**对库里 11 条真实视频做任何写操作。测完确认库回到只有原 11 条。（完成标准：交接块写明测过的路径与结果；库计数前后一致 = 11）
+- [x] **T5 收尾**：`CHANGELOG.md` 加一条（格式沿用文件现有风格）；`npm run build` 绿；commit（`git add <明确路径>` + `git commit -- <同路径>`，多会话共用工作树）。**不 push**（守卫硬拒）—— 前端需重新构建部署时写清所需用户手动步骤（如 `! pm2 restart bili` 是否必要）。
+**未验证的前提:**（2026-09-21 复审后）
+- **已验证**：DELETE 生产链路 —— 工作者 Playwright 34/34（vite dev 代理到生产 3000，真实 Express + JWT + SQLite，假 bvid）连 3 轮全过；全局者核对生产库 11 行、`BV_TEST%` 残留 0、线上 index.html 引用新哈希（`index-CwKkmMT3.js`/`index-NzTtxpY7.css`，与 `client/dist/assets` 一致）；「同步不复活」—— `sync.test.js` 新例 + 工作者注入缺陷红验证（本侧未重复注入，采信其报告，`git diff` 显示 `server/src` 零改动）。
+- **仍是判断/未实测**：① `page_cache` 删除视频后留孤行无害（103 行现存，无清理机制，删除不会加剧；未实测重新添加同一 bvid 的行为）；② 失败路径的 500 由 Playwright 路由伪造，未制造真实后端 500；③ 「无需 pm2 restart」依据 `express.static` 按请求读盘 + 2026-09-03 先例，未重启验证（线上已服务新哈希，间接印证）；④ 红底按钮在玻璃弹窗上的**观感**未经用户肉眼确认 —— 请用户在真机/浏览器看一眼首页弹窗与设置页列表，觉得色值/位置不合适再回这里改。
 
 **backlog（下次开 Phase 顺手项，非紧急）:**
 - 【2026-09-11 新增】`bilibili.test.js` 补断言：降级路径第二请求的凭据头（Cookie/UA/Referer）透传一致性 —— critic LOW（回归检测缺口，非现存漏洞）
@@ -43,7 +59,7 @@
 - **弹窗层级**：BottomNav 是 `z-50` 且在 DOM 中位于 `<router-view>` 之后，同 z-index 时导航栏胜出。所有全屏遮罩类弹窗必须 `z-[51]` 或更高，且手机端优先居中布局而非底部贴边
 - **手动完成视频不参与同步重算**：`manually_completed=1` 的视频永久跳过每日同步的 B站 数据重算，只走归档倒计时，不会被真实观看记录覆盖回低进度
 - **「已观看完视频」定义**：`progress>=100 OR archived=1`，不区分是手动标记还是自然看完达成
-- **归档 = 永久软隐藏，非删除**：`archived=1` 只从首页列表隐藏，记录永久保留在数据库，没有自动删除机制，也不新增（用户已确认维持现状）
+- **归档 = 永久软隐藏，非删除；删除 = 用户手动的硬删除（2026-09-21 新增）**：`archived=1` 只从首页列表隐藏，记录永久保留，**没有自动删除机制，也不新增**（用户已确认维持现状）。另有**用户主动触发**的硬删除（首页弹窗 + 设置页已看完列表，均需二次确认，`DELETE /api/videos/:id`），用于清除误加视频；同步只 UPDATE 不 INSERT，故不会复活已删视频。二者别混：归档可被「已观看完视频」列表看到，删除后彻底没有。
 - **归档倒计时按日历日计**：「进度 100% 持续 3 天归档」中的一天 = 一个日历日，同日多次同步不重复计数（2026-07-04 架构评审 H1 决策，本 Phase 实现）
 - **B站 请求节制**：历史翻页必须有提前终止 + 页数上限 + 页间延时，防触发风控（2026-07-04 架构评审 H2 决策）
 - **杯子动感 = wave rotate 光影（用户定版，2026-07-07）**：Cylinder3D 波浪动画用 `rotate` 旋转 blob（4s/6s 双层），用户经 A/B/C 实物对比明确选定——「杯壁光影循环」的观感优先于物理正确的 translateX 晃动。杯内气泡已否决（过小冗余），主页桌面网格**不加** max-width 约束（自然铺满视口）。后续任何 UI 轮不得以「更真实/更物理」为由改回，除非用户主动提出。**「视觉语言翻新」轮（2026-09-03）确认：只换杯壁材质/配色，wave rotate 动画本身不动。**
@@ -60,64 +76,55 @@
 
 <!-- 工作者和全局者 append。保守规则:只留最近 1 对(latest overseer + latest worker)。新 phase 启动时整体归档到 context_history.md -->
 
-## [2026-09-03 15:40] 全局者 — Phase「视觉语言翻新 — 液体玻璃」关闭
-
-**交付汇总：** T1–T10 全部落地。11 前端文件 + `server/src/index.js`（helmet CSP 放行 Google Fonts 两域）+ `index.html`/`vite.config.js`（theme-color / manifest bg → `#10101c`）。commit `a1a4a93`（feat，34 文件 1513+/216−，含 `plans/ui-refresh/` 设计源 + 3 验证脚本 + 10 断点截图；2MB `/design` seed payload `bili-pwa-visual-refresh.html` 因触发全局 pre-commit 机密扫描超时，加进 `.gitignore` 未入库，可由 `.dc.html` 源重生）。本条 docs commit 归档。已 push origin/master。
-
-**审查轨迹：** 安全预检命中（50 处，噪音为主；真安全面只有 CSP 两行）+ 工作者「安全相关」非空 → invoke `critic`。critic：CSP 为「加 Google Fonts」最小必要改动，无其他 directive 放宽、无 `unsafe-eval`/通配符、无内联脚本、无 XSS 向量、`plans/` 无真实凭据；唯一存疑 `styleSrc 'unsafe-inline'` 经全局者 `git log -S"'unsafe-inline'"` 复核确认系 commit e69e3c0（2026-04-30）既有、非本轮引入。功能面全局者独立抽查：T2 wave 五件套零 `+/-`、T5 nav z-50/弹窗 z-51 契约 + safe-area + h-screen 滚动、T7 结构（杯子无 backdrop-filter / blur ≤20px / 无 will-change / `@supports` 回退）、T8 `#10101c` 三处落地、build 绿 —— 全过。T10（桌面导航 `max-width:420px` 居中）单独复核几何 + 手机端像素零差异，通过。
-
-**偏离裁定：** 对比度驱动 4 处 token 微调 / 留白收敛到 `main` / slider 保留原生 accent-color —— 接受。桌面导航全宽 —— 用户看 1440 截图后拍板改限宽居中（落为 T10）。
-
-**新增跨 Phase 约定：** 「当前视觉语言 = 液体玻璃」条（见上「跨 Phase 关键约定」，含 token 位置 + blur 预算 + `@supports` 回退 + accent 青保留 focus 可见性 + 浮起导航契约 + AA 判定方式）。
-
-**backlog（滚动，见「当前状态」）：** 真机性能确认 / `@supports` 回退块 DRY / `styleSrc 'unsafe-inline'` 移除需 nonce / 2 个 Dependabot 告警 / M4 完整版。
-
-**完整逐轮交互（Phase 开启 spec + T1–T9 交接 + 复审 + T10 交接）已归档 `context_history.md`「Phase：视觉语言翻新 — 液体玻璃（2026-09-03）」段。**
-
-## [2026-09-11 04:42] 工作者 — 412 冻结修复：实现 + 测试 + 部署实测完成
+## [2026-09-21 08:43] 工作者 — 删除功能：实现 + 测试 + 端到端验证完成
 
 **完成情况：**
-- **实现**：`bilibili.js` `fetchVideoPages` 换端点降级链 —— 主 `/x/web-interface/wbi/view`，抛异常改走 `/x/player/pagelist`（数组形状适配 `{cid,duration}`），双失败抛汇总错误 `分P信息接口均失败 — wbi/view: …; pagelist: …`；降级仅由异常触发，单P→null 负缓存语义逐字不变；legacy `/x/web-interface/view` 与 `fetchVideoDetail` 一并移除。`sync.js` 步骤 5 逐视频 try/catch：失败 `console.warn`（bvid + err.message）→ `skippedCount++` → `continue`，不写库、不推进归档计数、不落负缓存；同步消息>0 时尾部追加「，跳过 N 个视频（分P信息获取失败）」，返回体新增 `skipped`。
-- **测试**（干净 shell `env -i`，无会话变量）：36 例全绿 = `bilibili.test.js` 5（新）+ `sync.test.js` 23（21+2 新）+ `backlog.test.js` 8。`sync.test.js` 的模块级 mock 未改动。
-- **提交**：`155f420`（4 文件，203+/11−；未 push，待全局者复审后发布）。`context.md` 未提交（按惯例）。
-- **部署实测**（用户 `! pm2 restart bili`；boot 正常，`bili-error.log` 重启后无新条目、mtime 停在 04:22 旧栈）：
-  - 登录 → `POST /api/sync`：HTTP 200（21.3s），`{ok:true,totalFetched:1188,updated:1,archived:0,skipped:0}`
-  - `sync_log` #153：success「同步完成：更新 1 个视频」——无跳过后缀，旧格式逐字一致
-  - `BV1YE411D7nH`（操作系统）：`last_synced_at` 9/5 → 2026-09-11 04:38:34；其 `page_cache` 由 8/30（恰在 9/6 03:07 越过 7 天 TTL —— 即本轮冻结的触发点）刷新为 04:38:34 —— 经新端点链实测取数成功
-  - 归档数 2 → 2（未骤增）
-- **独立探针**（应用自身 `fetchAllHistory` + 生产凭据只读解密、未打印）：历史窗口 = 1188 条，view_at 范围 2026-08-09 → 2026-09-11；窗口内本地视频恰 1 个（即上条操作系统课，最后观看 8/21）。其余 7 个最后观看早于 8/9，已滑出窗口。
+- **T1 后端测试**：新增 `server/tests/videos-delete.test.js` —— 真实路由测试（挂生产 `videos` router 含 `requireAuth`，token 由 `signToken()` 用 `vitest.config.js` 注入的测试 JWT_SECRET 签发，用 Node 内置 fetch 打临时监听端口；未引入 supertest 等新依赖）。7 例：删除成功 200 且行从 `listVideos()`/`listCompletedVideos()` 双消失；不存在 id → 404 且不影响其它行；非法 id（0/-1/1.5/abc）→ 400 且不删任何行；无 token → 401 且行仍在。`sync.test.js` 新增 1 例「已删除的 bvid 在 B站 历史窗口里 → runSync 后库里仍无该行」（同时断言 updated=0、fetchVideoPages 未被调用、消息「同步完成：更新 0 个视频」）。**红验证**：临时给 `sync.js` 注入「未知 bvid 就 INSERT 后 continue」缺陷 → 该例变红（失败点正是「库里仍无该行」断言）→ 还原，`git diff -- server/src/services/sync.js` 为空。干净 shell（`env -i PATH=/usr/bin:/bin HOME=/root`）**44 例全绿**（原 36 + 新 8）。
+- **T2 首页删除按钮**：`HomePage.vue` 弹窗底部加全宽红底「删除」（在「标记为已看完」下方，`margin-top: 1rem` 拉开间距；实心色无 backdrop-filter，故无 `@supports` 回退）。`window.confirm` 一次 → `api.deleteVideo(id)`；成功或 404 → 本地数组移除 + 关弹窗；其它失败 → `window.alert(e.message || '删除失败，请重试')` 且弹窗保持；请求在途 `:disabled`。保留 focus-visible accent outline 与 hover/active 反馈。
+- **T3 设置页删除**：`SettingsPage.vue` 已看完列表每行右侧加紧凑红底胶囊「删除」（与相邻 badge 同高 11px）；名称保持 ellipsis（`.settings-details__name` 补 `flex: 1`）；行为同 T2，在途按行禁用（`deletingIds` Set）。
+- **颜色 token**：`main.css` `:root` 新增 `--color-danger-solid: #dc2626`（白字 4.83:1 ≥ AA）与 `--color-danger-solid-hover: #b91c1c`（6.47:1），`tailwind.config.js` 的 `feedback` 同步两键；原 `--color-danger` 注释补「白字压其上仅 3.76:1，不可当实心按钮底」。（对比度按「当前视觉语言」约定的声明色静态模型算。）
+- **共用文案**：新增 `client/src/utils/videoDelete.js` 的 `confirmVideoDelete(video)`，文案 = 首行「确定要删除「<custom_name 或 title>」吗？」+ 空行 + 「此操作不可恢复，本地重命名、置顶状态与「已看完」标记也会一并丢失。」；两个入口共用同一份，防文案漂移。
+- **T4 端到端验证**：脚本 `/tmp/bili-verify/bili-verify-delete.mjs`（Playwright，**未进仓库**）。前端走 vite dev（`localhost:5173`，其 `/api` 代理指向生产 `127.0.0.1:3000`）→ 真实 Express + requireAuth + JWT + SQLite。**连续 3 轮 34/34 全过**。覆盖：首页取消（视频仍在、弹窗保持）／确认（弹窗关闭、卡片立即消失、刷新后仍不在、服务端行已消失）／失败（拦截 DELETE→500：alert 出现、弹窗保持、视频仍在）／在途禁用（DELETE 延迟 900ms 实测，两入口各 1 例）／设置页 375 与 320 宽无横向溢出（html 与行元素 scrollWidth 实测；截图 `/tmp/bili-verify-shots/02-settings-375.png`、`02-settings-320.png`）／设置页取消·确认·刷新持久·首页对应卡片同步消失／404 路径（另一端先真删 → UI 不再弹 alert、关弹窗、卡片消失）／无未捕获页面错误。测试数据只有假 bvid `BV_TEST_DEL_0921A/B/C`，**未对 11 条真实记录做任何写操作**（前后两列表 bvid 集合逐条一致）。
+- **T5 收尾**：`CHANGELOG.md` 加 `## [1.2.0] — 2026-09-21`（Added 三条，沿用版本段风格）；`npm run build` 绿（dist/assets/index-CwKkmMT3.js + index-NzTtxpY7.css）；commit `bac5b29`（8 文件，271+/2−，只带自辖路径，`context.md` 未提交）；**未 push**。
+- **库核对（只读）**：总行数 **11**（首页 9 + 已看完 3，重叠 1；已归档 2），`BV_TEST_DEL_0921%` 残留 0。
 
 **任务进度：**
-- [x] 任务 1
-- [x] 任务 2
-- [x] 任务 3（完成标准①另见下「未解决的疑虑」1）
+- [x] T1 后端测试补齐
+- [x] T2 首页删除按钮
+- [x] T3 设置页删除
+- [x] T4 端到端验证
+- [x] T5 收尾
 
 **关键决策点：**
-- 架构/接口变动：`fetchVideoPages` 成功路径契约不变（`{pages,totalDuration}` / 单P null）；失败由单错误变为含两端点的汇总 Error；`runSync` 返回体新增 `skipped`；同步消息仅跳过>0 时追加后缀。
-- 安全相关：**外部请求** —— 涉及：B站 端点变更（wbi/view、player/pagelist；汇总错误只含端点名与错误文本，不含凭据）。实测/探针只读解密生产 SESSDATA（沿用诊断先例，未打印）。其余（认证/密钥/用户输入/SQL/文件路径）：无。
-- 偏离原计划：无（移除 `fetchVideoDetail` 系任务清单明示允许；测试多补「降级路径单P→null」一例）。
+- 架构/接口变动：**后端零改动**（复用既有 `DELETE /api/videos/:id`）。前端新增模块 `client/src/utils/videoDelete.js`；新增 2 个 CSS token 并同步 `tailwind.config.js`。
+- 安全相关：**用户输入** —— 本轮唯一新增输入面是 URL 里的 `:id`，后端校验逐字未改（400/404/200 语义不变），已由 T1 真实路由测试覆盖（含 0/-1/1.5/abc 与无 token）。**外部请求**：无新增（未碰 B站 相关代码）。认证/密钥/SQL/文件路径：无。前端新增内容全部是模板插值与静态样式，无 innerHTML/动态 HTML 注入。
+- 偏离原计划：① 抽出 `utils/videoDelete.js` 供两入口共用（原决策只要求「每个入口只弹一次确认」，未指定文案实现是否共用——我判断共用才能保证两处文案逐字一致）；② T5 构建使前端上线（见下疑虑 1）。其余无偏离。
 - 未解决的疑虑：
-  1. **完成标准①「更新数 = 8」按系统实际语义核销为 1**：`runSync` 只刷新 B站 历史窗口内出现的视频（本地视频滑出窗口即不再刷新，系统既有语义）；探针证实当前窗口内本地视频恰 1 个。冻结前 9/4、9/5 成功同步同为 `updated=1` —— 修复后行为与冻结前一致。若期望更多刷新，属「窗口深度/刷新策略」议题，非本次 412 修复范围，请全局者裁定。
-  2. 9/12 03:07 cron 首次自动跑结果（沿用「未验证的前提」，明日确认）。
-  3. 窗口按天滑动 → 长期未观看的在追视频会自然停更（如上述 7 个）——供全局者知悉，非本轮引入。
+  1. **`npm run build` 等于前端上线**：`client/dist` 正是 PM2 所服务的静态目录，所以 T5 的构建动作已把本轮前端投放到生产（curl 验证：生产 3000 的 index.html 已引用新哈希资源，新 CSS 含 `danger-solid`）。「无需 pm2 restart」的依据 = `server/src/index.js` 的 `express.static(distPath)` 按请求读盘，属**判断**，未重启验证；先例依据 = 2026-09-03 轮（`client/dist` 上次构建时间即该轮 12:08）。若全局者认为未过审不应先构建，请审查时提出。
+  2. 失败路径的 500 由 Playwright 路由伪造，未制造真实后端 500；真实 500 走同一段 catch，判断风险低。
+  3. `page_cache` 删除后留孤行仍未实测（沿用「未验证的前提」，本轮未清）。
+  4. **「本 Phase 历史」现有 3 条**（[09-11 工作者]、[09-21 09:05 全局者]、本条），超出「只留最近 1 对」；[09-11 工作者] 条在 `context_history.md` 已有归档。归档按 WORKFLOW 属全局者职责，我未擅自处理，仅此标注。
+  5. 时间戳注记：本机时钟现为 2026-09-21 08:43 UTC，而上一轮全局者条目标注 09:05（晚于本机当前时间；`context.md` mtime 为 08:34）。本块按实际时间记录，若上条时间有误由全局者订正。
 
-**临时证据文件（VPS `/tmp`，非仓库）：** `/tmp/bili-smoke.js`（登录+同步冒烟）、`/tmp/bili-history-probe.cjs`（窗口探针）、`/tmp/bili-db-snapshot.js`（库快照）。
+**顺带变动：** 按工作者写入流程第一步，已在「当前状态」把 T1–T5 勾为完成并加一行「工作者完成状态」；全局者的决策内容（已定细节、未验证的前提、backlog）一字未动。
 
-## [2026-09-11 04:46] 全局者 — 审查通过：412 修复放行（插入任务闭环）
 
-**背景：** 工作者交接块（[2026-09-11 04:42] 条目）交付任务 1–3 完成；含一处待裁定：「完成标准①『更新数=8』按系统实际语义核销为 1」。旧条（[2026-09-11 04:28] 预诊断、[2026-09-11 04:40] 定稿）已随本轮归档至 `context_history.md`「插入任务：每日同步 412 冻结（2026-09-11）」段。
+## [2026-09-21 08:55] 全局者 — 审查通过：删除功能放行（commit `bac5b29`）
 
-**审查动作（本侧独立 + critic，2026-09-11 04:43–04:46）：**
-- 安全预检 `security-scan.sh afd305d`：命中 7 处（全在测试文件）；安全项非空（外部请求）→ invoke `critic`。
-- critic 报告：**无 CRITICAL/HIGH/MEDIUM**；唯一 [LOW] = 测试未断言降级路径第二请求的凭据头透传（回归检测缺口，非现存漏洞）→ 入 backlog。7 处命中逐条核实为测试噪音（内存库绑定参数 SELECT、相对导入、假凭据 `'sess-fake'`）。URL/参数构造（URLSearchParams + 硬编码 host；bvid 下游为参数化 SQL）、凭据头（SESSDATA 仅进 Cookie 头，从不进 URL/日志/错误）、降级与错误路径（纯字符串拼接，无注入汇点）、错误与 warn 内容 —— 均核对无问题。**总体判断：可放行。**
-- 全局者独立复核：源码 diff 逐行对照任务清单全符合；测试 36 例本侧干净 shell 重跑全绿（本 shell 无 JWT_SECRET）；生产核验 #153 success「更新 1 个视频」、`BV1YE411D7nH` last_synced_at/page_cache → 04:38:34、archived 2→2、error log 无新条目、pm2 online；降级链完整性探针 92 页视频两端点逐项一致（16/86/92 三例）。
+**背景：** 工作者交接块（[2026-09-21 08:43] 条）交付 T1–T5。旧全局者条（[08:34] 定方向）与 [2026-09-11 04:42] 工作者条已归档 `context_history.md`。
 
-**裁定（针对交接块「未解决的疑虑」）：**
-1. 接受「更新数=1」：与冻结前 #144（9/3 10:00）、#145（9/4）、#146（9/5）逐字一致，属既有「只刷新 B站 历史窗口内视频」语义；探针证据（窗口 1188 条、08-09→09-11；窗口内本地视频恰 1；其余 7 个 last_synced_at ≤ 8/31，其中 2 个 manually_completed）成立。原「预期 8」作废。
-2. cron 观察项保留（9/12 03:07）。
-3. 「长期未观看 → 自然停更」非本轮引入 → backlog 备忘。
+**审查动作（2026-09-21 08:44–08:55）：**
+- 安全预检 `security-scan.sh d2c5783`：命中 24 处，逐条看全是测试文件（`videos-delete.test.js` 的 token/auth/fetch/exec、`sync.test.js` 的测试内 SELECT）与相对导入 `../` —— 噪音；但工作者「安全相关」填了「用户输入」（URL `:id`）→ 按规则 invoke `critic`。
+- critic 报告：**可放行**。DELETE 路由校验未改（`Number.isInteger(id)&&id>0` + `requireAuth` + 参数化 SQL）、前端无 `v-html`/`innerHTML`、confirm 文案为纯文本、测试隔离且 JWT 来自 `vitest.config.js` 注入、无越权面。唯一提示 [LOW]：`SettingsPage.vue` 的 `ref(new Set())` + `add/delete` 可能不触发 `:disabled` 重渲染。
+- **全局者对该提示的裁定：不成立，不修改。** 用 `@vue/reactivity` 直接验证：`ref(new Set())` 下 effect 读 `has(7)`，`add` 与 `delete` 后各重跑一次（输出 `[false,true,false]`）→ Vue 3 对 Set 有集合级追踪。工作者 Playwright 也实测过设置页在途禁用。critic 该条是误报（判断依据：上述实测）。
+- 全局者独立复核：`git diff d2c5783 bac5b29` 逐行读前端全部改动（`videoDelete.js` / `HomePage.vue` / `SettingsPage.vue` / `main.css` / `tailwind.config.js` / `CHANGELOG.md`）符合 T1–T5 与「已定细节」1–7；`server/src` 零改动；`server` 干净 shell（`env -i`）44 例全绿（24+8+7+5，与工作者一致）；生产库 11 行、无 `BV_TEST%`；线上资源哈希与 dist 一致。
 
-**发布决定：放行** commit `155f420`。push 被守卫拦截（双模型会话均无放行通道）→ 用户执行 `! git push origin master`；本条 docs commit 随之（本地）。
+**核实到的工作者交接偏差（已处理）：** 工作者疑虑 4 称「[09-11 工作者] 条在 `context_history.md` 已有归档」—— **不实**，`grep` 证实 history 中没有该条，只在 context.md。已由全局者补归档（history 里该条标题已注明「2026-09-21 补归档」）。另：工作者疑虑 5 指出我上条 09:05 时间戳晚于本机时钟 —— 属实（该条实为 08:34 写入，我凭估算填了 09:05），已订正。
 
-**移交：** 无待办；下一轮 session 核对 9/12 cron 结果。
+**偏离裁定：** ① 抽出 `utils/videoDelete.js` 共用文案 —— 接受（防两入口文案漂移）；② 构建先于复审上线 —— **接受但记为流程偏差**：`npm run build` 直接更新生产 `client/dist`，工作者在未过审前已让改动上线；本次内容审查后无问题，故无需回滚；今后涉及前端的任务，工作者应把「构建上线」放在复审之后或在交接里事先申明（不新增规则，只提醒；memory 已记载「build 即上线」）。
 
+**发布决定：放行** `bac5b29`。push 被守卫硬拒（双模型会话均无放行通道）→ 用户执行 `! git push origin master`；本条 docs commit 随之。
+
+**新增约定：** 已在「跨 Phase 关键约定」补「删除 = 用户手动硬删除」（08:34 已写，本轮确认无需再改）。
+
+**移交：** 无工作者待办。用户肉眼确认红底按钮观感（见「未验证的前提」④）。
