@@ -1168,3 +1168,21 @@ CSS gzip 6.24 KB + JS gzip 45.20 KB = **51.44 KB**（比 Round 2 基线 51.76 KB
   5. 本轮对比度脚本在 `/tmp/bili-verify/celebrate-contrast.mjs`（未进仓库）；未改动 `plans/ui-refresh/check-contrast.mjs`。
 
 **顺带变动：** 按工作者写入流程第一步，已在「当前状态」勾选 T1–T4 并加一行完成状态；未改动全局者正文。
+
+## [2026-09-21 11:02] 全局者 — 审查通过：庆祝动效 + 归档 7 天放行（commit `c78c2a6` + `a3a462e`）
+
+**背景：** 工作者交接块（[2026-09-21 10:55] 条）交付 T1–T4。旧条：[08:43] 工作者（删除任务）、[10:39] 全局者（定稿）已归档 `context_history.md`。
+
+**审查动作：**
+- 安全预检 `security-scan.sh 9a3fbeb`：命中 6 处（`sync.test.js` 的 `SELECT archived` ×4 + 两个 vue 的相对导入 `../`）—— 噪音；规则要求「命中即必审」→ invoke `critic`。critic 报告：**可放行**；localStorage 读写全部 try/catch 且降级为「宁可不播」、无 XSS/innerHTML、定时器全部在 `onUnmounted` 清理、`watch` 与 `onMounted` 不会重复触发、`sync.js` 两处都改到常量、测试用内存库 + 完整 mock 无真实密钥。唯一「可选防御性改进」：`scheduleCelebration` 里对 `rootEl.value` 加 null 判断 —— **裁定不改**（判断：`watch` 只在组件存活期触发，卸载即被 Vue 停掉；且 `onMounted` 时 ref 已就位；未实测卸载竞态，若日后出现再补）。
+- 全局者独立复核：`git diff 9a3fbeb a3a462e` 逐行读 `sync.js` / `celebrated.js` / `HomePage.vue` / `SettingsPage.vue` / `main.css` / `tailwind.config.js` / `Cylinder3D.vue` 全部符合 plan 009（关键帧 ×2 压成 3s 一次、`*-once` 只用于悬停、静态态弧 `opacity:0`、reduced-motion 早退、存储写失败则不播、悬停重放门控在 `hover:hover + pointer:fine + no-preference`）；`server` 干净 shell（`env -i`）46 例全绿；看了 375 / 320 两宽的静态与庆祝中截图，光环无硬边、无横向溢出。
+
+**裁定（针对交接块「未解决的疑虑」）：**
+1. **库行数 11→10**：闭环 —— 用户本轮亲口说「你说的一个 100% 视频已经删了，这就是前面我新增删除功能第一个用到的地方」，与工作者判断一致，无需排查。
+2. **数字对上端液体色最差 2.04 <3:1**：**接受**。判据本就定为「杯中列 ≥3:1」（数字位于杯高 50%），中列最差 3.06 达标；上端是几何事实，且现有白色数字在上端也只有 2.42，并非本轮引入的退化。不要求三端达标（否则数字须近纯白，庆祝的紫色感就没了）。
+3. 320 宽多 6px 可滚距离：接受。4. `@property --ang` 降级：接受（计划已认可）。
+5. 偏离 ①–④（底色提亮 / 光环缩 92% + 遮罩反算 / 容器 padding+等量负 margin / `markCelebrated` 返回布尔）：全部接受，均有实测或计划依据。
+
+**发布决定：放行** `c78c2a6`、`a3a462e`。授权工作者执行 T5（构建上线）。push 仍被守卫硬拒 → 用户 `! git push origin master`。
+
+**移交：** 工作者 T5（构建 + 线上哈希核对）→ 用户肉眼验收 → 用户 push。plan 009 状态已置 DONE（实现+审查通过；上线以 T5 完成为准）。
