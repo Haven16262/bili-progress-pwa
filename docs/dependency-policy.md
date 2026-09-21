@@ -66,18 +66,25 @@ node scripts/lock-check.mjs --diff <base-ref> [--min-age-days 7] [--allow name@v
 node scripts/lock-check.mjs --audit [--root <目录>]
 ```
 
-**`--diff`**：对 `server/` 与 `client/` 两份锁文件，比对 `<base-ref>`（git ref）与工作区当前版本，报告**版本变化 / 新增 / 移除**计数与逐包明细，并断言：
+**`--diff`**：对 `server/` 与 `client/` 两份锁文件，比对 `<base-ref>`（git ref，先解析成 SHA）与工作区当前版本，报告**版本变化 / 新增 / 移除**计数与逐包明细，并断言：
 
-1. 变化/新增包的 `resolved` 全部是 `https://registry.npmjs.org/`；
-2. 有 `resolved` 的包都有 `integrity`；
-3. 没有新增 `hasInstallScript: true`；
-4. 每个变化/新增版本都发布满 `--min-age-days` 天（默认 7），未满且不在 `--allow` 里 = 违规。
+1. **每一个**条目的 `resolved`（若有）都是 `https://registry.npmjs.org/`；
+2. **每一个**有 `resolved` 的条目都有 `integrity`；
+3. **每一个**条目都没有「新增 install script」（相对 base 由假变真）；
+4. **同版本但内容变了**（`resolved` 变了、`integrity` 变了）= 违规——版本号相同不代表同内容，这是最典型的篡改/重发信号（H1）；
+5. `resolved` 必须与条目自身的 name/version **绑定**（`registry.npmjs.org/<name>/-/<basename>-<version>.tgz`）：指向别的包/版本 = **违规**（H2 选「违规」而非「算不出」；只有**解析不了**才按「算不出」退出 2）；
+6. 每个「版本变化 / 新增」的版本都要发布满 `--min-age-days` 天（默认 7），未满且不在 `--allow` 里 = 违规。
 
-**「变动包」** = 版本变化 + 新增（移除只报告、不计入）。**没有变动时**「最年轻」显示 `—`（空集无最年轻），退出码仍是 0。
+**「变动包」** = 版本变化 + 新增（移除只报告、不计入）。**没有变动时**「最年轻」显示 `—`，退出码仍是 0。
 
-**`--audit`**：对两份锁文件各跑 `npm audit --package-lock-only --json`（不依赖 `node_modules`），再查 `gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts?state=open`。
+**`--audit`**：把两份锁文件（含 `package.json`）拷进空临时目录，各跑 `npm audit --package-lock-only --json`（不依赖 `node_modules`），再查 `gh api repos/Haven16262/bili-progress-pwa/dependabot/alerts?state=open&per_page=100`。
+- 告警数**到 100（per_page 上限）**时按违规处理并标注「≥100，未翻页」——不用 `--paginate`（>100 时 gh 会把多页数组拼成 `[...][...]`，永远解析失败）（L2）。
 
-**退出码**：`0` = 无违规 / 全 0；`1` = 有违规（`--audit` 时为有漏洞或 open 告警 > 0）；`2` = **算不出**——base-ref 不存在、锁文件读不了或解析不了、`npm view` 联网失败、某包查不到发布时间、`npm audit` 输出不是 JSON（联网失败时常为空，**绝不当作 0 个漏洞**）、`gh` 不可用或未登录（**明说「GitHub 告警未查」，不偷偷跳过报绿**）。
+**退出码**：`0` = 无违规 / 全 0；`1` = 有违规（`--audit` 时为有漏洞或 open 告警 > 0）；`2` = **算不出**——base-ref 不存在、锁文件读不了/条目畸形（非对象、`resolved` 非字符串）、`npm view` 联网失败、查不到发布时间或发布时间不可用、`npm audit` 输出不是 JSON（联网失败时常为空，**绝不当作 0 个漏洞**）、`npm audit` 报 0 漏洞但退出码非 0（自相矛盾）、`gh` 不可用或未登录（**明说「GitHub 告警未查」，不偷偷跳过报绿**）、以及**任何未预期的内部异常**（也一律 2，不会是 1）。
+
+**npm 子进程的配置隔离（H4）**：所有 `npm` 调用都 ① 固定 `--registry=<生效 registry>` ② `--userconfig` / `--globalconfig` 指向空的临时文件（必须是两个**不同**文件——npm 拒绝同一文件双重加载） ③ 环境里**剔除全部 `npm_config_*`** ④ `--diff` 的 cwd 与 `--audit` 的锁文件目录都是空临时目录（仓库里的 `.npmrc` 影响不到）。**生效的 registry 一律回显在输出里**。
+
+**`LOCK_CHECK_REGISTRY`（仅供测试）**：默认官方源；把它指向别的 registry 只用于测试「registry 真被钉住」。**不认 `npm_config_registry`**——不要再用它模拟断网（那个环境变量会被故意忽略）。
 
 **输出末行是固定格式**（便于粘贴进交接与 grep）：
 
@@ -86,18 +93,36 @@ node scripts/lock-check.mjs --audit [--root <目录>]
 查了 server <n> 包 / client <m> 包（npm audit），GitHub open 告警 <k> 个；漏洞 <v> 个
 ```
 
-**自测记录（2026-09-21，确定性回归，不依赖「今天有哪些版本刚发布」）**：
+## 5. 自测与威胁模型
 
-| 命令 | 期望 | 实测 |
-|---|---|---|
-| `--diff d6df3c7 --min-age-days 0` | 0 | 0（45 个变动包，最年轻 2.6 天） |
-| `--diff d6df3c7 --min-age-days 3650` | 1 | 1（45 项违规） |
-| `--diff no-such-ref-0921` | 2 | 2（git show 失败） |
-| `npm_config_registry=http://127.0.0.1:9 --diff d6df3c7` | 2 | 2（ECONNREFUSED） |
-| `--audit --root <d6df3c7 旧锁文件临时目录>` | 1，漏洞 >0 | 1（15 个漏洞 = server 7 + client 8） |
-| `PATH` 去掉 `gh` 后 `--audit` | 2，明说「GitHub 告警未查」 | 2 |
-| `npm_config_registry=http://127.0.0.1:9 --audit` | 2（不许当 0 漏洞） | 2 |
-| `--audit`（现状） | 0 | 0 |
-| `--diff d6df3c7 --allow electron-to-chromium@1.5.433` | 1，该包进「放行」不进违规 | 1（违规 8、放行 1） |
+### 5.1 可重复自测
 
-> 注：对 `d6df3c7`（清理前）做 `--diff` 时，`--min-age-days 7` 下会有 8 个包报「未满 7 天」——那是 2026-09-21 清理**先于本策略**发生的历史结果，不需要回改；策略只约束**此后**的锁文件变动。
+```bash
+node scripts/lock-check.selftest.mjs          # 末行：跑了 <N> 项，通过 <p>，失败 <f>，需联网但联网失败 <n>
+```
+
+- 只在**临时目录**里造夹具（`git init` 的小仓库 + 伪造锁文件 + PATH 里的 npm/gh 桩），不写真实仓库任何文件，跑完清理。
+- 覆盖：原有 9 项确定性回归（R1–R9）+ 本轮审查的每个缺陷用例（H1、H2a/H2b、H3×3、H4a/H4b、M1、M2×3、L1a/L1b、L2、L5），共 25 项。
+- **有失败或联网失败即非零退出**；需要真实 npm/gh 的用例先探测联网，探测失败记为「需联网但联网失败」，**不算通过**。
+- `LOCK_CHECK_BIN=<路径>` 可拿别的脚本跑同一套用例——用于「先红后绿」证据（见下）。
+- 确定性：不依赖「今天有哪些新版本」，断言用末行解析而非写死包数。
+
+**证据（2026-09-21，修复这一轮的留档）**：
+
+| 被测版本 | 结果 |
+|---|---|
+| 旧版 `d8b6ca2` | **10/25**（退出 1）：H1 报「查了 0 个变动包…违规 0 项」退出 0、H2a/H2b 退出 0、H3 三种版本串都报「最年轻 NaN 天」退出 0、H4a/H4b 退出 0、M1 崩栈退出 1、L1b 让 git 去写文件、L2 不标「≥100」、L5 报 0 漏洞退出 0 |
+| 修复版 | **25/25**（退出 0） |
+| 修复版**故意去掉 H1 同版本比对** | **24/25**（退出 1，H1 变红）→ 已还原为逐字节一致的修复版 |
+
+### 5.2 威胁模型
+
+- 主要场景是**防 npm 自己的诚实输出出错 / 防锁文件被静默改内容**：`--diff` 由人在本机手跑、没有 CI，所以「不可信 PR 的锁文件」「cwd 里被放 `.npmrc`」是次要场景（H4 仍按不采信处理），但 H1–H3 这类**结构性缺口不依赖网络劫持**，属于必防。
+- 新版本冷静期防的是「刚发布就被投毒 / 很快暴露缺陷」那一小段窗口；它不是审计工具，不判断包本身是否可信。
+
+### 5.3 限制（知道就好，别当它保平安）
+
+- **`hasInstallScript` 只对诚实 npm 产出的锁有意义**：它只是锁条目的字段，由 npm 写入；手写的恶意锁可以整条省掉。本脚本无法从锁文件本身证明「安装时不会跑脚本」。
+- **`integrity` 同理**：字段在不在、和 `resolved` 对不对得上，脚本可以查；但脚本不下载 tarball 去核对哈希内容，也不验证签名。
+- **不覆盖**：包名相似度/抢注（typosquatting）、维护者变更、依赖深度爆炸、许可证变更——这些要么需要人的判断，要么需要别的工具。
+- `--audit` 的 GitHub 告警口径 = **默认分支上的 `package-lock.json`**：本地装了新依赖但没 push 新锁文件，告警不会关（本地代理指标是两份锁文件的 `npm audit` 为 0）。

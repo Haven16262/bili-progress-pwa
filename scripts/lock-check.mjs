@@ -5,18 +5,27 @@
 //   node scripts/lock-check.mjs --audit [--root <目录>]
 //
 // 退出码：0 = 无违规；1 = 有违规（或 --audit 有漏洞/open 告警）；
-//         2 = 算不出（base-ref 不存在、锁文件读不了、联网失败、某包查不到发布时间、gh 不可用）。
-// 只依赖 node 内置模块 + `git` / `npm view` / `npm audit` / `gh` 命令。
-import { execFileSync, spawnSync } from 'node:child_process'
-import { readFileSync, existsSync } from 'node:fs'
+//         2 = 算不出（ref 不存在、锁文件读不了/条目畸形、联网失败、查不到发布时间、gh 不可用、
+//             输出自相矛盾）——任何「没查成」都是 2，绝不当作放行。
+// 只依赖 node 内置模块 + `git` / `npm` / `gh` 命令。
+//
+// 环境变量 LOCK_CHECK_REGISTRY：**仅供测试**，把 npm 的 registry 指到本地假服务器；默认官方源。
+// 生效值一律回显在输出里。其余 npm 配置（环境变量 npm_config_*、cwd 的 .npmrc）一律不采信。
+import { spawnSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const EXIT_OK = 0
 const EXIT_VIOLATION = 1
 const EXIT_UNKNOWN = 2
 const TARGETS = ['server', 'client']
-const REGISTRY_PREFIX = 'https://registry.npmjs.org/'
+const OFFICIAL_REGISTRY = 'https://registry.npmjs.org/'
+const EFFECTIVE_REGISTRY = process.env.LOCK_CHECK_REGISTRY || OFFICIAL_REGISTRY
+// 包名白名单（审查者用两份真实锁文件验证过 0 个不匹配）；不匹配的包名一律拒绝查询
+const PACKAGE_NAME_RE = /^(?:@[A-Za-z0-9._~-]+\/)?[A-Za-z0-9._~][A-Za-z0-9._~-]*$/
 const ALERTS_API = 'repos/Haven16262/bili-progress-pwa/dependabot/alerts?state=open&per_page=100'
+const MAX_BUFFER = 64 * 1024 * 1024
 
 class CannotCompute extends Error {}
 
@@ -33,9 +42,13 @@ function parseArgs(argv) {
     if (a === '--diff') { opts.mode = 'diff'; opts.base = argv[++i] }
     else if (a === '--audit') { opts.mode = 'audit' }
     else if (a === '--min-age-days') { opts.minAgeDays = Number(argv[++i]) }
-    else if (a === '--allow') { for (const s of String(argv[++i] || '').split(',')) if (s.trim()) opts.allow.add(s.trim()) }
-    else if (a === '--root') { opts.root = resolve(argv[++i]); opts.rootGiven = true }
-    else { console.error(`未知参数：${a}`); usage(); process.exit(EXIT_UNKNOWN) }
+    else if (a === '--allow') { for (const s of String(argv[++i] ?? '').split(',')) if (s.trim()) opts.allow.add(s.trim()) }
+    else if (a === '--root') {
+      const v = argv[++i]
+      if (v === undefined) { console.error('--root 缺值'); usage(); process.exit(EXIT_UNKNOWN) }
+      opts.root = resolve(v)
+      opts.rootGiven = true
+    } else { console.error(`未知参数：${a}`); usage(); process.exit(EXIT_UNKNOWN) }
   }
   if (opts.mode === 'diff' && !opts.base) { console.error('--diff 需要 <base-ref>'); usage(); process.exit(EXIT_UNKNOWN) }
   if (!opts.mode) { usage(); process.exit(EXIT_UNKNOWN) }
@@ -43,30 +56,68 @@ function parseArgs(argv) {
   return opts
 }
 
-function spawn(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, ...opts })
-  if (r.error) throw new CannotCompute(`${cmd} 无法执行：${r.error.message}`)
-  return r
+// ── 子进程：受控环境 + 受控 cwd（不采信 cwd 的 .npmrc、不采信 npm_config_* 环境变量）──
+
+let scratch = null
+function scratchDir() {
+  if (scratch === null) {
+    scratch = mkdtempSync(join(tmpdir(), 'lock-check-'))
+    // user / global 必须是两个不同路径：npm 拒绝同一文件双重加载（实测报
+    // 「double-loading config … as "global", previously loaded as "user"」）
+    writeFileSync(join(scratch, 'empty-user-npmrc'), '')
+    writeFileSync(join(scratch, 'empty-global-npmrc'), '')
+    process.on('exit', () => { try { rmSync(scratch, { recursive: true, force: true }) } catch { /* 清理失败不影响结论 */ } })
+  }
+  return scratch
 }
 
-function run(cmd, args, cwd) {
-  const r = spawn(cmd, args, { cwd })
+function cleanEnv() {
+  const env = {}
+  for (const [k, v] of Object.entries(process.env)) {
+    if (/^npm_config_/i.test(k)) continue
+    env[k] = v
+  }
+  return env
+}
+
+function npmConfigArgs() {
+  return [
+    `--registry=${EFFECTIVE_REGISTRY}`,
+    `--userconfig=${join(scratchDir(), 'empty-user-npmrc')}`,
+    `--globalconfig=${join(scratchDir(), 'empty-global-npmrc')}`
+  ]
+}
+
+function spawn(cmd, args, opts = {}) {
+  return spawnSync(cmd, args, { encoding: 'utf8', maxBuffer: MAX_BUFFER, env: cleanEnv(), ...opts })
+}
+
+function runGit(args, cwd) {
+  const r = spawn('git', args, { cwd })
   if (r.status !== 0) {
-    throw new CannotCompute(`${cmd} ${args.join(' ')} 失败（exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
+    throw new CannotCompute(`git ${args.join(' ')} 失败（exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
   }
   return r.stdout
 }
 
 // ── --diff ────────────────────────────────────────────────────────────────
 
-function readLockPackages(root, dir, ref) {
+function keyName(lockPath) {
+  // 锁 key 必须是 node_modules/... 形式；workspace 之类的路径一律拒绝（别让它被当 GitHub shorthand）
+  if (!lockPath.includes('node_modules/')) {
+    throw new CannotCompute(`锁条目路径不含 node_modules/，拒绝处理：${JSON.stringify(lockPath)}`)
+  }
+  return lockPath.split('node_modules/').pop()
+}
+
+function readLockPackages(root, dir, ref, sha) {
   let text
-  if (ref === null) {
+  if (sha === null) {
     const file = join(root, dir, 'package-lock.json')
     if (!existsSync(file)) throw new CannotCompute(`读不到 ${file}`)
     text = readFileSync(file, 'utf8')
   } else {
-    text = run('git', ['show', `${ref}:${dir}/package-lock.json`], root)
+    text = runGit(['show', `${sha}:${dir}/package-lock.json`], root)
   }
   let json
   try {
@@ -80,59 +131,94 @@ function readLockPackages(root, dir, ref) {
   return json.packages
 }
 
-function pkgName(lockPath) {
-  return lockPath.split('node_modules/').pop()
+// resolved 与 name/version 的绑定（H2）：registry.npmjs.org/<name>/-/<basename>-<version>.tgz
+function checkResolvedBinding(dir, name, entry, violations) {
+  if (entry.resolved === undefined) return
+  const resolved = entry.resolved
+  if (typeof resolved !== 'string') throw new CannotCompute(`[${dir}] ${name} 的 resolved 不是字符串`)
+  if (!resolved.startsWith(OFFICIAL_REGISTRY)) return // 断言①已按违规记下，这里不再解析
+  const rest = resolved.slice(OFFICIAL_REGISTRY.length)
+  const m = rest.match(/^(.*)\/-\/([^/]+)$/)
+  if (!m || !m[2].endsWith('.tgz')) {
+    throw new CannotCompute(`[${dir}] ${name} 的 resolved 无法解析出包名/版本：${resolved}`)
+  }
+  const expectedName = (entry.name && entry.name !== name) ? entry.name : name
+  const unscoped = expectedName.startsWith('@') ? expectedName.split('/')[1] : expectedName
+  const expectedBase = `${unscoped}-${entry.version}`
+  if (m[1] !== expectedName || m[2] !== `${expectedBase}.tgz`) {
+    violations.push(`[${dir}] ${name}@${entry.version} 的 resolved 指向别的包/版本：${resolved}`)
+  }
 }
 
-function diffDir(root, dir, ref) {
-  const oldPkgs = readLockPackages(root, dir, ref)
-  const newPkgs = readLockPackages(root, dir, null)
-  const bumped = []   // 版本变化的包
-  const added = []    // 新增的包
+function diffDir(root, dir, sha) {
+  const oldPkgs = readLockPackages(root, dir, null, sha)
+  const newPkgs = readLockPackages(root, dir, null, null)
+  const bumped = []
+  const added = []
   const removed = []
   const violations = []
 
+  // H1：每一个条目都要过内容断言；同版本但内容变化 = 违规
   for (const [lockPath, entry] of Object.entries(newPkgs)) {
     if (!lockPath) continue
+    if (entry === null || typeof entry !== 'object') {
+      throw new CannotCompute(`[${dir}] 锁条目不是对象：${lockPath}`)
+    }
     const old = oldPkgs[lockPath]
-    const isAdded = !old
-    const isBumped = old && old.version !== entry.version
-    if (!isAdded && !isBumped) continue
-    const name = pkgName(lockPath)
-    const item = { dir, name, from: old ? old.version : null, to: entry.version, lockPath }
-    ;(isAdded ? added : bumped).push(item)
+    if (old !== undefined && (old === null || typeof old !== 'object')) {
+      throw new CannotCompute(`[${dir}] ${sha}: 锁条目不是对象：${lockPath}`)
+    }
+    const name = keyName(lockPath)
+    const isAdded = old === undefined
+    const isBumped = old !== undefined && old.version !== entry.version
+    if (isAdded || isBumped) (isAdded ? added : bumped).push({ dir, name, from: old ? old.version : null, to: entry.version })
 
-    if (entry.resolved && !entry.resolved.startsWith(REGISTRY_PREFIX)) {
+    if (entry.resolved !== undefined && !entry.resolved.startsWith(OFFICIAL_REGISTRY)) {
       violations.push(`[${dir}] ${name}@${entry.version} 的 resolved 不是官方 registry：${entry.resolved}`)
     }
-    if (entry.resolved && !entry.integrity) {
+    if (entry.resolved !== undefined && !entry.integrity) {
       violations.push(`[${dir}] ${name}@${entry.version} 有 resolved 却缺 integrity`)
     }
     if (entry.hasInstallScript && !(old && old.hasInstallScript)) {
       violations.push(`[${dir}] ${name}@${entry.version} 新增了 install script`)
     }
+    if (old && old.version === entry.version) {
+      if (old.resolved !== entry.resolved) {
+        violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 resolved 变了：${old.resolved} → ${entry.resolved}`)
+      }
+      if (old.integrity !== entry.integrity) {
+        violations.push(`[${dir}] ${name}@${entry.version} 版本没变但 integrity 变了`)
+      }
+    }
+    checkResolvedBinding(dir, name, entry, violations)
   }
   for (const [lockPath, entry] of Object.entries(oldPkgs)) {
-    if (lockPath && !newPkgs[lockPath]) removed.push(`${pkgName(lockPath)}@${entry.version}`)
+    if (lockPath && !newPkgs[lockPath]) removed.push(`${keyName(lockPath)}@${entry.version}`)
   }
   return { bumped, added, removed, violations }
 }
 
 function publishTimes(name) {
-  const out = spawn('npm', ['view', name, 'time', '--json'])
-  if (out.status !== 0) {
-    throw new CannotCompute(`npm view ${name} time 失败（联网？exit ${out.status}）：${(out.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
+  if (!PACKAGE_NAME_RE.test(name)) throw new CannotCompute(`包名不合法，拒绝查询：${JSON.stringify(name)}`)
+  const r = spawn('npm', ['view', '--json', ...npmConfigArgs(), '--', name, 'time'], { cwd: scratchDir() })
+  if (r.status !== 0) {
+    throw new CannotCompute(`npm view ${name} time 失败（联网？exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
   }
-  let json
+  let times
   try {
-    json = JSON.parse(out.stdout)
+    times = JSON.parse(r.stdout)
   } catch {
     throw new CannotCompute(`npm view ${name} time 的输出无法解析`)
   }
-  return json
+  if (times === null || typeof times !== 'object') throw new CannotCompute(`npm view ${name} time 不是对象`)
+  return times
 }
 
 function runDiff(opts) {
+  if (opts.base.startsWith('-')) throw new CannotCompute(`base-ref 以 - 开头，拒绝：${opts.base}`)
+  const sha = runGit(['rev-parse', '--verify', '--quiet', '--end-of-options', `${opts.base}^{commit}`], opts.root).trim()
+  if (!/^[0-9a-f]{40,64}$/.test(sha)) throw new CannotCompute(`base-ref 解析不出 commit SHA：${opts.base}`)
+
   const dirs = {}
   const violations = []
   const allowed = []
@@ -140,7 +226,7 @@ function runDiff(opts) {
   let youngest = null
 
   for (const dir of TARGETS) {
-    const d = diffDir(opts.root, dir, opts.base)
+    const d = diffDir(opts.root, dir, sha)
     dirs[dir] = d
     violations.push(...d.violations)
     changedCount += d.bumped.length + d.added.length
@@ -151,9 +237,13 @@ function runDiff(opts) {
   for (const dir of TARGETS) {
     for (const item of [...dirs[dir].bumped, ...dirs[dir].added]) {
       if (!timesCache.has(item.name)) timesCache.set(item.name, publishTimes(item.name))
-      const iso = timesCache.get(item.name)[item.to]
-      if (!iso) throw new CannotCompute(`查不到 ${item.name}@${item.to} 的发布时间`)
-      const ageDays = (Date.now() - Date.parse(iso)) / 86400000
+      const times = timesCache.get(item.name)
+      if (!Object.hasOwn(times, item.to)) throw new CannotCompute(`查不到 ${item.name}@${item.to} 的发布时间`)
+      const t = Date.parse(times[item.to])
+      const ageDays = (Date.now() - t) / 86400000
+      if (!Number.isFinite(t) || !Number.isFinite(ageDays) || ageDays < 0) {
+        throw new CannotCompute(`${item.name}@${item.to} 的发布时间不可用：${times[item.to]}`)
+      }
       item.ageDays = ageDays
       if (youngest === null || ageDays < youngest) youngest = ageDays
       if (ageDays < opts.minAgeDays) {
@@ -164,12 +254,11 @@ function runDiff(opts) {
     }
   }
 
-  // 逐包明细与违规清单
+  console.log(`registry: ${EFFECTIVE_REGISTRY}`)
   for (const dir of TARGETS) {
     const d = dirs[dir]
-    const bumpedStr = d.bumped.map(i => `${i.name} ${i.from}→${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')
     console.log(`${dir}: 版本变化 ${d.bumped.length}，新增 ${d.added.length}，移除 ${d.removed.length}`)
-    if (d.bumped.length) console.log(`  变化：${bumpedStr}`)
+    if (d.bumped.length) console.log(`  变化：${d.bumped.map(i => `${i.name} ${i.from}→${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
     if (d.added.length) console.log(`  新增：${d.added.map(i => `${i.name}@${i.to}（${i.ageDays.toFixed(1)} 天）`).join('，')}`)
     if (d.removed.length) console.log(`  移除：${d.removed.join('，')}`)
   }
@@ -193,9 +282,15 @@ function runDiff(opts) {
 // ── --audit ───────────────────────────────────────────────────────────────
 
 function auditDir(root, dir) {
-  const cwd = join(root, dir)
-  if (!existsSync(join(cwd, 'package-lock.json'))) throw new CannotCompute(`读不到 ${cwd}/package-lock.json`)
-  const r = spawn('npm', ['audit', '--package-lock-only', '--json'], { cwd })
+  const src = join(root, dir, 'package-lock.json')
+  if (!existsSync(src)) throw new CannotCompute(`读不到 ${src}`)
+  // 把锁文件（和 package.json）拷进空临时目录再跑：cwd 里的 .npmrc / package.json 影响不到
+  const work = mkdtempSync(join(scratchDir(), 'audit-'))
+  copyFileSync(src, join(work, 'package-lock.json'))
+  const pkgJson = join(root, dir, 'package.json')
+  if (existsSync(pkgJson)) copyFileSync(pkgJson, join(work, 'package.json'))
+
+  const r = spawn('npm', ['audit', '--package-lock-only', '--json', ...npmConfigArgs()], { cwd: work })
   let json
   try {
     json = JSON.parse(r.stdout || '')
@@ -207,14 +302,17 @@ function auditDir(root, dir) {
   const deps = json?.metadata?.dependencies
   if (!vulns || typeof vulns.total !== 'number') throw new CannotCompute(`npm audit（${dir}）输出缺少 metadata.vulnerabilities`)
   if (!deps || typeof deps.total !== 'number') throw new CannotCompute(`npm audit（${dir}）输出缺少 metadata.dependencies.total`)
-  return { packages: deps.total, vulns: vulns.total, bySeverity: vulns }
+  if (vulns.total === 0 && r.status !== 0) {
+    throw new CannotCompute(`npm audit（${dir}）报 0 漏洞但退出码是 ${r.status}，输出与状态矛盾`)
+  }
+  return { packages: deps.total, vulns: vulns.total, bySeverity: vulns, status: r.status }
 }
 
-function openAlertCount() {
-  const r = spawnSync('gh', ['api', '--paginate', ALERTS_API], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  if (r.error) {
-    throw new CannotCompute(`GitHub 告警未查：gh 无法执行（${r.error.code || r.error.message}）`)
-  }
+function openAlerts() {
+  // 不用 --paginate：>100 时 gh 会把多页数组拼成 [...][...]，无法解析且永远失败。
+  // per_page=100 且长度到顶就按违规处理（不真翻页）。
+  const r = spawn('gh', ['api', ALERTS_API])
+  if (r.error) throw new CannotCompute(`GitHub 告警未查：gh 无法执行（${r.error.code || r.error.message}）`)
   if (r.status !== 0) {
     throw new CannotCompute(`GitHub 告警未查：gh api 查询失败（exit ${r.status}）：${(r.stderr || '').trim().split('\n')[0] || '(无 stderr)'}`)
   }
@@ -225,18 +323,21 @@ function openAlertCount() {
     throw new CannotCompute('gh api 输出无法解析')
   }
   if (!Array.isArray(json)) throw new CannotCompute('gh api 输出不是数组')
-  return json.length
+  return { count: json.length, possiblyMore: json.length >= 100 }
 }
 
 function runAudit(opts) {
   const server = auditDir(opts.root, 'server')
   const client = auditDir(opts.root, 'client')
-  const alerts = openAlertCount()
+  const alerts = openAlerts()
   const vulnTotal = server.vulns + client.vulns
+  console.log(`registry: ${EFFECTIVE_REGISTRY}`)
   console.log(`  server 漏洞明细：${JSON.stringify(server.bySeverity)}`)
   console.log(`  client 漏洞明细：${JSON.stringify(client.bySeverity)}`)
-  console.log(`查了 server ${server.packages} 包 / client ${client.packages} 包（npm audit），GitHub open 告警 ${alerts} 个；漏洞 ${vulnTotal} 个`)
-  return (vulnTotal === 0 && alerts === 0) ? EXIT_OK : EXIT_VIOLATION
+  if (alerts.possiblyMore) console.log(`  ⚠ GitHub open 告警 ≥100，未翻页，按违规处理`)
+  const alertsStr = `${alerts.count}${alerts.possiblyMore ? '+' : ''}`
+  console.log(`查了 server ${server.packages} 包 / client ${client.packages} 包（npm audit），GitHub open 告警 ${alertsStr} 个；漏洞 ${vulnTotal} 个`)
+  return (vulnTotal === 0 && alerts.count === 0) ? EXIT_OK : EXIT_VIOLATION
 }
 
 // ── main ──────────────────────────────────────────────────────────────────
@@ -249,5 +350,7 @@ try {
     console.error(`算不出：${err.message}`)
     process.exit(EXIT_UNKNOWN)
   }
-  throw err
+  // 退出 1 只留给「查完了，有违规」；任何其它异常都是「没查成」
+  console.error(`内部错误：${err && err.stack ? err.stack : String(err)}`)
+  process.exit(EXIT_UNKNOWN)
 }
