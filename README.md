@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](./CHANGELOG.md)
 
-Bilibili 观看进度 3D 可视化 PWA。通过圆柱体高度直观展示所有追番/追剧的观看进度，支持自动同步 B 站观看历史。
+Bilibili 观看进度 3D 可视化 PWA。通过圆柱体高度直观展示所有多 P 视频的观看进度，支持自动同步 B 站观看历史。
 
 ## 技术栈
 
@@ -90,11 +90,11 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 **主页 — 3D 圆柱体进度可视化**
 
-![主页截图](./docs/screenshots/home.png)
+![主页截图](./docs/screenshots/home-1024.png)
 
 **设置页 — SESSDATA 配置与数据同步**
 
-![设置页截图](./docs/screenshots/settings.png)
+![设置页截图](./docs/screenshots/settings-1024.png)
 
 ## 相关文件
 
