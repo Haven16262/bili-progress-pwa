@@ -43,8 +43,8 @@ description: 切换到全局者角色 —— 读 context.md 里工作者的最�
    - 优先看顶部 `## 当前状态` 区块
    - 再看最新的历史记录，定位最近一条「工作者」或「工作者 → 全局者」条目
    - 顺带 `python3 "$HOME/.claude/scripts/ctx-size.py" context.md; wc -l context_history.md`，拿到 context.md 的行数、
-     字符数（均已排除 `⚠️ 已证伪` 墓碑，并印出「查了 N 条墓碑」）和 history 行数；ctx-size.py 非零退出表示
-     墓碑格式认不出，照实告诉用户，不要当作没超线
+     字符数（均已排除 `⚠️ 已证伪` 墓碑，并印出「查了 N 条墓碑」）、字符线比较（印出「超线/未超线」）和 history 行数；
+     ctx-size.py 非零退出表示墓碑格式或字符线认不出，照实告诉用户，不要当作没超线
    - 顺带 `python3 "$HOME/.claude/scripts/ctx-pointers.py" context.md`：查「本 Phase 历史」里指向会被覆盖内容的指针
      （「见当前状态…」「见顶部」「见上一条」，规则见 WORKFLOW.md「撰写权限」）。它逐行全查，退出码 0/3 时印一行「查了第 a..b 行…悬空指针 N 处，其中疑似在代码块/注释里 J 处」，
      3 = 有命中，并逐条列出（标「疑似在代码块/注释里」的也算命中）；1 = 范围算不出（段落布局认不出），2 = 读取失败 —— 1 和 2 都照实告诉用户，不要当作没有命中
@@ -114,7 +114,8 @@ description: 切换到全局者角色 —— 读 context.md 里工作者的最�
    `context.md` ≥ 300 行时追加（WORKFLOW.md「长度规则」的软上限）：
    > （context 334 行 / 31000 字符 ⚠️ 超软上限，下一轮决策前先清理：旧轮迁 `context_history.md`）
 
-   字符数只作显示，暂无字符触发线（见 WORKFLOW.md「长度规则」）。
+   ctx-size.py 印出「超线」时同样追加（字符线见 WORKFLOW.md「长度规则」，软线、只提醒）：
+   > （context 290 行 / 51283 字符 ⚠️ 超字符线 N（N 取自 ctx-size.py 输出的「字符线 N」），下一轮决策前先清理：旧轮迁 `context_history.md`）
 
    `context_history.md` ≥ 1800 行时追加：
    > （history 2407 行 ⚠️ 建议做一次阶段封存，见 WORKFLOW.md「Phase 关闭时的归档操作」）
