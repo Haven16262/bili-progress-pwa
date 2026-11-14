@@ -29,6 +29,7 @@
 - 【2026-09-11 新增】「窗口外视频刷新策略」：B站 历史窗口滑动 → 长期未观看的在追视频自然停更（现语义；本次全量 8 个中 7 个已滑出窗口）。如做定向刷新，须受「B站 请求节制」约定约束
 - 真机性能确认：液体玻璃 `backdrop-filter`（headless 4× throttle 已测；详情见上一 Phase 关闭条目）
 - `@supports` 玻璃回退块 DRY（约 12 份散在组件 scoped 样式）
+- 【2026-11-14 新增·既有行为】**`client/src/components/AddVideoModal.vue` 是手写 div 弹窗，缺键盘/读屏 a11y**：无 `role="dialog"`/`aria-modal`、无 Esc 关闭、无焦点陷阱与 `inert`，打开后焦点仍留在背后页面。本项目 a11y 为硬约束。候选做法：换原生 `<dialog>` + `showModal()`（浏览器接管 Esc/焦点/inert/::backdrop；Chrome 官方 `modern-web-guidance` 的 `light-dismiss-a-dialog`、`animate-to-from-top-layer` 指南可参考）。**换之前须查** `closedby` 等新特性在 iOS Safari（本 PWA 主要在手机上用）的支持与回退；须保持现有玻璃回退（`@supports not (backdrop-filter…)`）与 `plans/002-modal-exit-transitions.md` 的退出动效不退化。来源：RC 会话对 blog 与本项目前端的人工对照（未跑自动扫描），尚未验证修法。
 - `styleSrc 'unsafe-inline'` 移除需 nonce/hash 方案
 - Dependabot 告警已清零（2026-09-21，GitHub open=0）。用户同意「依赖冷却期 + npm audit 进例行体检」→ **本轮落实**（见「当前状态」；pitstop 新增「项目依赖」域的提案已写入 Drafts，待用户另开 session）。仍开放的选项：Dependabot 自动 PR / GitHub Actions 定时审计——本轮不做，需要一个审查流程接住依赖变化 PR
 - 【2026-09-21 新增】**接入 YouTube（方向，用户决定先不做）**：官方 API 无观看历史/进度，不能照搬 B站 的 SESSDATA 模式；建议先「手动进度 + API 取元数据」再视需要加浏览器端上报。含数据库迁移（`bvid` 唯一键改「平台+ID」，强制升级项，全局者实现）。完整调研与开工前要问用户的两件事见 `docs/idea-youtube-integration-2026-09-21.md`
